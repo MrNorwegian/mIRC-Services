@@ -1,12 +1,12 @@
 ; /mServices.raw <args>
 alias mServices.raw {
-  if ($window($mServices.window) != $null) { ms.echo orange "Raw client" $v1 [W]: $1- }
-  if ($sock(mServices) != $null) { sockwrite -nt mServices $1- }
+  if ($sock(mServices) != $null) { sockwrite -nt mServices $1- | ms.echo orange [Sockwrite Client] <-- $1- }
+  else { ms.echo red [Sockwrite Client] <-- Server is not running | return }
 }
 ; /mServices.sraw <args>
 alias mServices.sraw {
-  if ($window($mServices.window) != $null) { ms.echo orange "Raw server" $v1 [W]: $inttobase64($mServices.config(numeric),2) $1- }
-  if ($sock(mServices) != $null) { sockwrite -nt mServices $inttobase64($mServices.config(numeric),2) $1- }
+  if ($sock(mServices) != $null) { sockwrite -nt mServices $inttobase64($mServices.config(numeric),2) $1- | ms.echo orange [Sockwrite Server] <-- $inttobase64($mServices.config(numeric),2) $1- }
+  else { ms.echo red [Sockwrite Server] <-- Server is not running | return }
 }
 
 alias mServices.start {
@@ -24,11 +24,14 @@ alias mServices.stop {
   ms.echo green Stopped server
 }
 alias ms.echo { 
-  ; TODO, check if $mServices.config(window) exists (is active) and echo to that window
-  if ( $1 == red ) { echo 4 -at <-mIRC Services-> $2- }
-  elseif ( $1 == green ) { echo 3 -at <-mIRC Services-> $2- }
-  elseif ( $1 == blue ) { echo 2 -at <-mIRC Services-> $2- }
-  elseif ( $1 == orange ) { echo 7 -at <-mIRC Services-> $2- }
-  elseif ( $1 == yellow ) { echo 8 -at <-mIRC Services-> $2- }
-  else { echo -at <-mIRC Services-> $1- }
+  var %ms.echo.name <mServices> 
+  if ( $1 == red ) { var %echo.color 4 }
+  elseif ( $1 == green ) { var %echo.color 3 }
+  elseif ( $1 == blue ) { var %echo.color 2 }
+  elseif ( $1 == orange ) { var %echo.color 7 }
+  elseif ( $1 == yellow ) { var %echo.color 8 }
+  else { var %echo.color 14 }
+
+  if ($window($mServices.config(window)) != $null) { echo %echo.color -t $mServices.config(window) %ms.echo.name $2- }
+  else { echo %echo.color -at %ms.echo.name $1- }
 }

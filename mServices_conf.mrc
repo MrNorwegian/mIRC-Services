@@ -23,6 +23,7 @@ alias mServices.config {
   if ( $1 == flags ) { return %mServices.flags }
   if ( $1 == window ) { return %mServices.window }
   if ( $1 == configured ) { return %mServices.configured }
+  if ( $1 == rawdebug ) { return %ms.mServices.rawdebug }
 
 }
 
@@ -42,6 +43,7 @@ alias mServices.conf {
   set %mServices.flags +
   set %mServices.window @mServices
   set %mServices.configured NO
+  set %ms.mServices.rawdebug true
   echo -at mServices.* variables is reset to default values, please configure them before starting the server.
 }
 menu Status {
