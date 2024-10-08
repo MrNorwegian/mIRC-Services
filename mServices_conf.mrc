@@ -1,6 +1,9 @@
-on *:load: { mServices.conf }
-on *:unload: { unset %mServices.* }
+on *:load: { mServices.conf | ms.echo green Loaded mServices_conf.mrc }
+on *:unload: { unset %mServices.* | ms.echo red Unloaded mServices_conf.mrc }
 
+on *:start:{
+  if ( %mServices.configured == NO ) { ms.echo red Configuration is not set, please configure it before starting the server. }
+}
 ; parse the configuration.
 alias mServices.config {
   ; Our services configuration.

@@ -1,3 +1,6 @@
+on *:load: { ms.echo green Loaded mServices_base64.mrc }
+on *:unload: { ms.echo red Unloaded mServices_base64.mrc }
+
 alias -l i { return $calc($poscs(ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789[],$1)-1) }
 alias -l ii { return $mid(ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789[],$calc($int($1) + 1),1) }
 

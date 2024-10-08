@@ -1,0 +1,3 @@
+* spybot and fishbot quits with (Numeric nick collision (Ghost))
+- tried with static numeric, 1-4096 and way higher number 
+
