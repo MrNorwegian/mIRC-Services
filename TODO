@@ -1,3 +1,14 @@
-* spybot and fishbot quits with (Numeric nick collision (Ghost))
-- tried with static numeric, 1-4096 and way higher number 
+* Check if received PASS and SERVER info is correct  
 
+* Make a db of linked servers in S messages
+* Use db of linked servers to find all servers doing a Squit 
+* Quit all users on squit servers (and part all it's channels)
+
+* Redo ms.load.* and ms.unload.* to be more dynamic
+- Make a variable like this ? /ms.load.servicebot <fishbot|spybot|banana> 
+- Save bot settings in a .ini file
+
+* Save server settings in a .ini file (cleans up variables)
+
+* Manage M and OM (mode and opmode)
+- do a little test, M is for both usermode and chanmode, dunno with opmode

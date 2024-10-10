@@ -25,3 +25,27 @@ alias inttobase64 {
   }
   return %o
 }
+alias ms.picknumeric { 
+  var %tmpnumeric %ms.client.numeric
+  inc %ms.client.numeric
+  return $+($inttobase64($mServices.config(numeric),2),$inttobase64(%tmpnumeric,3)) 
+}
+alias ms.picknumeric2 { 
+  var %i $r(1,4096)
+  while (%i) { 
+    var %ms.new.client.numeric $+($inttobase64($mServices.config(numeric),2),$inttobase64(%i,3)) 
+    if ( $istok($ms.read(c,clients,list),%ms.new.client.numeric,32) ) { dec %i }
+    else { return %ms.new.client.numeric }
+  }
+}
+
+alias listnumerics { 
+  var %c $ms.db(read,c,clients,list)
+  var %n $numtok(%c,32)
+  var %x = 1
+  while (%x < %n) { 
+    var %r $gettok(%c,%x,32)
+    echo -a Numeric list - Server numeric: $mid(%r,1,2)  Client numeric: $mid(%r,3,4) Base64 Numeric: $base64toint($mid(%r,3,4))
+  inc %x 
+  }
+}

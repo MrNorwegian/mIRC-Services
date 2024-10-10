@@ -11,6 +11,7 @@ alias mServices.config {
     if ( %mServices.numeric <= 4095 ) { return %mServices.numeric }
     else { echo 4 -st * /mServices.config: Numeric must be between 0 and 4095. | halt }
   }
+  if ( $1 == maxcon ) { return %mServices.maxcon }
   if ( $1 == serverName ) { return %mServices.serverName }
   if ( $1 == info ) { return %mServices.info }
 
@@ -34,9 +35,10 @@ alias mServices.config {
 alias mServices.conf {
   ; Our services configuration.
   set %mServices.numeric 0
-  set %mServices.info A jupe server for ircu P10 protocol in mSL.
-  set %mServices.serverName changeme.localhost
+  set %mServices.maxcon 512
 
+  set %mServices.serverName changeme.localhost
+  set %mServices.info A jupe server for ircu P10 protocol in mSL.
   ; Link configuration.
   set %mServices.server localhost
   set %mServices.port 4400

@@ -3,20 +3,24 @@ on *:unload: { unset %mServices.spybot.loaded | ms.echo red Unloaded mServices_s
 
 alias ms.load.spybot {
   if ( %mServices.spybot.loaded == true ) { 
-    ms.echo green prepping loading spybot
-    set %ms.spybot.numeric $ms.makenewclientnumeric
+    ms.echo blue [mServices mIRC Services] prepping loading spybot
+    set %ms.spybot.numeric $ms.picknumeric
     set %ms.spybot.nick spybot
     set %ms.spybot.user spybot
-    set %ms.spybot.host spybot.is.here.to.spy.on.you
+    set %ms.spybot.host is.here.to.spy.on.you
+    set %ms.spybot.ip 127.0.0.1
     set %ms.spybot.realname spybot oO
     set %ms.spybot.modes +x
-    set %ms.spybot.channels #spychan
-    ms.echo green spawning %ms.spybot.nick ! %ms.spybot.user @ %ms.spybot.host [ %ms.spybot.realname ] with modes: %ms.spybot.modes 
 
-    ; Making new bot and writing it to the sevrer's database
-    mServices.sraw N %ms.spybot.nick 1 $ctime %ms.spybot.user %ms.spybot.host %ms.spybot.modes $inttobase64($longip(127.0.0.1),6) %ms.spybot.numeric $+(:,%ms.spybot.realname)
-    ms.newclient %mServices.numeric N %ms.spybot.nick 1 $ctime %ms.spybot.user %ms.spybot.host %ms.spybot.modes $inttobase64($longip(127.0.0.1),6) %ms.spybot.numeric $+(:,%ms.spybot.realname)
+    ; More channels must be comma separated.
+    set %ms.spybot.chan #spychan
 
-    mServices.raw %ms.spybot.numeric J %ms.spybot.channels
+    ms.servicebot.spawn %ms.spybot.nick $ctime %ms.spybot.user %ms.spybot.host %ms.spybot.modes %ms.spybot.ip %ms.spybot.numeric %ms.spybot.realname 
+    ms.servicebot.join %ms.spybot.numeric %ms.spybot.chan
+  }
+}
+alias ms.unload.spybot { 
+  if ( %mServices.spybot.loaded == true ) { 
+    ms.servicebot.despawn %ms.spybot.numeric 
   }
 }
