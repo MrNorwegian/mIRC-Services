@@ -1,6 +1,13 @@
 on *:load: { set %mServices.botcommands.loaded true | ms.echo green Loaded mServices_botcommands.mrc }
 on *:unload: { unset %mServices.botcommands.loaded | ms.echo red Unloaded mServices_botcommands.mrc }
 
+alias ms.load.servicebot { 
+  var %lsb $numtok($1,44)
+  while ( %lsb ) { 
+    ms.load. $+ $gettok($1,%lsb,44)
+    dec %lsb
+  }
+}
 alias ms.servicebot.spawn {
   if ( $ms.db(read,c,$1,numeric) ) { ms.echo red [Service bot] $1 is already spawned, skipping. | return }
   else {

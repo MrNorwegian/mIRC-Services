@@ -55,7 +55,6 @@ on *:sockopen:mServices:{
   ; Sending END_OF_BURST
   mServices.sraw EB
   ms.echo blue [mServices mIRC Server] Sendt end of burst, waiting for response
-
 }
 on *:sockread:mServices:{
   var %mServices.sockRead = $null
@@ -74,31 +73,48 @@ on *:sockread:mServices:{
     ms.echo blue [mServices mIRC Server] Received response with EB and sending EA
     return
   }
+  elseif ($istok(EB EOB_ACK,$2,32) == $true) && ( $1 != %ms.myhub) {
+    ; new server connected to another server on the network, do something ??? nah?
+    return
+  }
 
   ; Received Acknowledge the end of burst
   if ($istok(EA,$2,32) == $true) && ( %ms.myhub == $1 ) {
     ms.echo blue [mServices mIRC Server] Received Acknowledge the end of burst
     ms.echo blue [mServices mIRC Server] Starting to load services
-    ; TODO: make /ms.load.servicebot <fishbot|spybot|banana> 
-    ms.load.spybot
-    ms.load.fishbot
-    ms.load.banana
+    ms.load.servicebot spybot,fishbot,banana
+    return
+  }
+
+  elseif ($istok(EA,$2,32) == $true) && ( $1 != %ms.myhub) {
+    ; new server connected to another server on the network, do something ??? nah?
     return
   }
 
   ; <PASS> :<password>
   if ($istok(PASS,$1,32) == $true) { 
-    ; TODO: check if password is correct
+    if ( $mid($2,2,99) == $mServices.config(password) ) { 
+      ms.echo blue [mServices mIRC Server] Received response with PASS
+      return
+    }
+    else { 
+      ms.echo red [mServices mIRC Server] Password is incorrect, closing connection
+      sockclose mServices
+      return
+    }
   }
 
   ; <server numeric> <S|SERVER> <server name> <hop count> <start time> <link time> <protocol> <server numeric(2)+maxconn(3)> [+flags] :<description>
-  elseif ($istok(S SERVER,$2,32) == $true) || ($istok(SERVER,$1,32) == $true) {
-    ; TODO: check if server name is correct and server numeric doesnt crash
+  elseif ($istok(SERVER,$1,32) == $true) {
+    ; TODO: check if server name is correct and server numeric doesnt crash with us
     ms.echo blue [mServices mIRC Server] Received response with SERVER
     ms.newserver $1-
     return
   }
-
+  elseif ($istok(S,$2,32) == $true) {
+    ms.newserver $1-
+    return
+  }
   ; <numeric> <SQ|SQUIT> <server name> <time> :<reason>
   elseif ($istok(SQ SQUIT,$2,32) == $true) {
     ; TODO remove clients connected to the server sending SQ, also all leaf servers for that server, sooo good luck with that
@@ -133,7 +149,7 @@ on *:sockread:mServices:{
   ; <client numeric> <J|JOIN> <channel> <timestamp> 
   elseif ($istok(J JOIN,$2,32) == $true) {
     if ( $3 !isnum ) { ms.client.join $1 $3 $4 }
-    ; if $3 is 0 it's a quit message i think, it seems like it's a quit message
+    ; if $3 is 0 then the user joined 0 (that's like /partall)
     else { ms.client.quit $1 noquit }
     return
   }
@@ -147,6 +163,12 @@ on *:sockread:mServices:{
   ; <client numeric> <M|MODE> <client nick> <:+-modes> 
   elseif ($istok(M MODE,$2,32) == $true) {
     ; TODO set modes, NOTE: this is for channels AND clients !
+    return
+  }
+
+  ; <client numeric> <T|TOPIC> <channel> *?* ctime :[topic]
+  elseif ($istok(T TOPIC,$2,32) == $true) {
+    ; TODO set topic
     return
   }
   ; <client numeric> <OM|OPMODE> <channel> <modes> <params\client numerics>
@@ -206,6 +228,10 @@ on *:sockread:mServices:{
     mServices.sraw Z $3-
     return
   }
+  elseif ($istok(RI RPING,$2,32) == $true) {
+    ; mServices.sraw RO $3-
+    return
+  }
 
   ; <numeric> MO[TD] <server numeric>
   elseif ($istok(MO MOTD,$2,32) == $true) {
@@ -214,14 +240,14 @@ on *:sockread:mServices:{
   }
 
   ; <numeric> RI|V|R <server numeric> ; This is just som misc stuff
-  ; T = topic, TODO: make a topic command
-  elseif ($istok(RI V R A T,$2,32) == $true) { return }
+  elseif ($istok(V R A,$2,32) == $true) { return }
 
   ; <client numeric> W|WHOIS <target numeric> :<target nick>
   elseif ( $istok(W,$2,32) == $true ) {
     mServices.sraw 311 $1 $mid($4,2,99) %ms. [ $+ [ $mid($4,2,99) ] ] [ $+ [ .user ] ] %ms. [ $+ [ $mid($4,2,99) ] ] [ $+ [ .host ] ] %ms. [ $+ [ $mid($4,2,99) ] ] [ $+ [ .realname ] ]
     ; mServices.sraw 313 $1 $mid($4,2,99) :is an IRC Operator
     mServices.sraw 312 $1 $mid($4,2,99) nakaservices.deepnet.chat A mIRC Services server
+    ; here show the channels the user is in (for fishbot and banana, not X *doh*) - Except +s\+p channels 
     ; mServices.sraw 330 $1 $mid($4,2,99) AUTHNAME :is logged in as
     mServices.sraw 317 $1 $mid($4,2,99) 0 %ms.startime :seconds idle, signon time
     mServices.sraw 318 $1 $mid($4,2,99) :End of /WHOIS list.
