@@ -27,12 +27,11 @@ alias ms.servicebot.despawn {
 }
 
 alias ms.servicebot.join { 
-  if ( $numtok($2,44) > 2 ) {
-    var %c $2 
+  if ( $numtok($2,44) >= 2 ) {
+    var %c $numtok($2,44)
     while ( %c ) { 
-      if ( $istok($ms.db(read,c,$1,channels),$gettok($2,%c,44),32) ) { 
-        ms.echo red [$1] $gettok($2,%c,44) is already in the channel, skipping.
-        return 
+      if ( $istok($ms.db(read,l,$1),$gettok($2,%c,44),32) ) { 
+        ms.echo red [Servicebot join] $1 is already in $gettok($2,%c,44), skipping.
       }
       else { 
         mServices.raw $1 J $gettok($2,%c,44) $ctime
@@ -46,12 +45,23 @@ alias ms.servicebot.join {
     ms.client.join $1 $2 $ctime
   }
 }
+;%ms.fishbot.numeric
+; <client numeric> <servicebot numeric> <channel>
+alias ms.servicebot.invited {
+  var %ms.sb.clientnum $1
+  var %ms.sb.chan $3
+  var %ms.sb.num %ms. [ $+ [ $2 ] ] [ $+ [ .numeric ] ]
+  var %ms.sb.chans %ms. [ $+ [ $2 ] ] [ $+ [ .channels ] ]
+  if ($istok(%ms.sb.chans,%ms.sb.num,44)) { ms.servicebot.join %ms.sb.num %ms.sb.chan }
+  else { set %ms. [ $+ [ $2 ] ] [ $+ [ .channels ] ] $addtok(%ms.sb.chans,%ms.sb.chan,44) | ms.servicebot.join %ms.sb.num %ms.sb.chan }
+  echo -a DEBUG $1- %ms.sb.num
+}
 
 ; <kicked numeric> <channel>
 alias ms.servicebot.kicked {
-  var %ms.sb.nick $ms.db(read,c,$1,nick)
+  var %ms.sb.nick $gettok($gettok($ms.db(read,c,$1),2,44),2,32)
   var %ms.sb.chans %ms. [ $+ [ %ms.sb.nick ] ] [ $+ [ .channels ] ]
-  if ($istok(%ms.sb.chans,$2,44)) { set %ms.fishbot.channels $remtok(%ms.fishbot.channels,$1,44) }
+  if ($istok(%ms.sb.chans,$2,44)) { set %ms. [ $+ [ %ms.sb.nick ] ] [ $+ [ .channels ] ] $remtok(%ms.sb.chans,$2,44) }
 }
 
 ; placeholder, this two aliases are going to be used for text and command response of the bots 

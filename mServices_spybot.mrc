@@ -24,3 +24,39 @@ alias ms.unload.spybot {
     ms.servicebot.despawn %ms.spybot.numeric 
   }
 }
+
+alias ms.spybot.report { 
+  ; remember: %ms.status 
+
+  if ( $1 === S ) { 
+    return
+  }
+  ; N %ms.ns.num %ms.ns.name %ms.ns.hop %ms.ns.starttime %ms.ns.linktime %ms.ns.protocol %ms.ns.maxcon %ms.ns.flags %ms.ns.desc
+  if ( $1 === N ) { 
+    return
+  }
+  ; C %ms.cc.num %ms.cc.chan
+  if ( $1 === C ) { 
+    return
+  }
+  ; J %ms.cj.num %ms.cj.chan
+  if ( $1 === J ) { 
+    return
+  }
+  ; L %ms.cl.num %ms.cl.chan
+  if ( $1 === L ) { 
+    return
+  }
+  ; Q %ms.cq.num %ms.cq.chans 
+  if ( $1 === Q ) { 
+    return
+  }
+  ; K %ms.ck.num %ms.ck.chan %ms.ck.reason
+  if ( $1 === K ) { 
+    return
+  }
+  ; M
+  if ( $1 === M ) { 
+    return
+  }
+}

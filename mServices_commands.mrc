@@ -20,7 +20,7 @@ alias mServices.start {
 alias mServices.stop {
   if ($sock(mServices) == $null) { ms.echo orange Server is not running | return }
   ; make ms.unload.servicebot <fishbot|spybot|banana> (same with load)
-  ms.echo green Stopping the server
+  ms.echo green[mServices mIRC Server] Stopping the server
   ms.unload.fishbot
   ms.unload.banana
   ms.unload.spybot
@@ -142,11 +142,18 @@ alias ms.newserver {
   ; Is the server already in the database? whops that shouldnt happen :(
   if (!$istok($ms.db(read,l,servers),%ms.ns.num,32)) { ms.db write l servers $addtok($ms.db(read,l,servers),%ms.ns.num,32) }
 
+  if ( %ms.spybot.report == true ) { ms.spybot.report N %ms.ns.num %ms.ns.name %ms.ns.hop %ms.ns.starttime %ms.ns.linktime %ms.ns.protocol %ms.ns.maxcon %ms.ns.flags %ms.ns.desc }
   return
 }
 
-; <chan> <createtime??> [+chanmodes> [limit] [key]] AzAAE,BbACg,AoAAH:v,ABAAx:o,AzAAC,BdAAA,BWAAA:vo,AzAAA :%latest!*@* olderban!*@*
-; reg,voiced,oped,voiceandoped 
+; On burst on this server
+; <Server numeric> B <chan> <createtime> [+chanmodes> [limit] [key]] AzAAE,BbACg,AoAAH:v,ABAAx:o,AzAAC,BdAAA,BWAAA:vo,AzAAA :%latest!*@* olderban!*@*
+
+; On burst of other servers
+; <Server numeric> B <chan> <createtime>
+; <Server numeric> B <chan> <createtime> [nick numerics]
+; <Server numeric> B <chan> <createtime> [chanmode] [nick numerics]
+
 alias ms.burstchannels {
   var %ms.bc.chan $1
   var %ms.bc.createtime $2
@@ -237,6 +244,7 @@ alias ms.channel.create {
     ms.echo blue [IAL DB] Client %ms.cc.num created %ch
     dec %c 
   }
+  if ( %ms.spybot.report == true ) { ms.spybot.report C %ms.cc.num %ms.cc.chan }
   return
 }
 alias ms.client.join {
@@ -250,12 +258,13 @@ alias ms.client.join {
     ; Check if nick was already in the channel *whoops*
     if (!$istok($ms.db(read,l,%ch),%ms.cj.num,44) ) { 
       ms.db write l %ch $addtok($ms.db(read,l,%ch),%ms.cj.num,44)
-      ms.db write l %ms.cc.num $addtok($ms.db(read,l,%ms.cj.num),%ch,32)
+      ms.db write l %ms.cj.num $addtok($ms.db(read,l,%ms.cj.num),%ch,32)
       ms.echo blue [IAL DB] Client %ms.cj.num joined %ch
     }
 
     dec %c
   }
+  if ( %ms.spybot.report == true ) { ms.spybot.report J %ms.cj.num %ms.cj.chan }
   return
 }
 
@@ -291,6 +300,8 @@ alias ms.client.part {
     ms.echo blue [IAL DB] Client %ms.cl.num parted channel %ms.cl.tmpch
     dec %c
   }
+  if ( %ms.spybot.report == true ) && ( $3 != kicked ) { ms.spybot.report L %ms.cl.num %ms.cl.chan }
+  elseif ( %ms.spybot.report == true ) && ( $3 == kicked ) { ms.spybot.report K %ms.cl.num %ms.cl.chan }
   return
 }
 
@@ -305,13 +316,14 @@ alias ms.client.quit {
   ; when join 0 the client is not quiting, i'm using this alias to part all channels
   if ( $2 != noquit ) { 
     ; Remove client from server
-    var %ms.cq.srvnum $gettok($ms.db(read,c,%ms.cq.num),1,44)
+    var %ms.cq.srvnum $gettok($gettok($ms.db(read,c,%ms.cq.num),1,44),2,32)
 
     ; remove client from clients list
     ms.db rem c %ms.cq.num
-    ms.db write l %ms.cq.num $remtok($ms.db(read,l,%ms.cq.num),%ms.cq.num,44)
+    ms.db write l %ms.cq.srvnum $remtok($ms.db(read,l,%ms.cq.srvnum),%ms.cq.num,32)
     ms.echo blue [IAL DB] Removed client %ms.cq.num from server
   }
+  if ( %ms.spybot.report == true ) { ms.spybot.report Q %ms.cq.num %ms.cq.chans }
   return
 }
 
@@ -321,29 +333,32 @@ alias ms.db.reset {
   ms.db rem c
   ms.db rem ch
   ms.db rem l
-  if ( $hget(servers) ) { hfree servers }
-  if ( $hget(clients) ) { hfree clients }
-  if ( $hget(channels) ) { hfree channels }
-  if ( $hget(list) ) { hfree list }
+  if ( $hget(servers) ) { hfree servers | hmake -s servers 100 }
+  else { hmake -s servers 100 }
+  if ( $hget(clients) ) { hfree clients | hmake -s clients 10000 }
+  else { hmake -s clients 10000 }
+  if ( $hget(channels) ) { hfree channels | hmake -s channels 1000 }
+  else { hmake -s channels 1000 }
+  if ( $hget(list) ) { hfree list | hmake -s list 10000 }
+  else { hmake -s list 10000 }
   ; reset client numeric
   set %ms.client.numeric 0
 }
-
 ; $ms.db(read,s,arg1)
 ; /ms.db write ch arg1 arg2+
 ; /ms.db rem\del c [arg1]
 alias ms.db {
+
   ; TODO: add  $ms.db(search,TEXT) to search for a specific value in the database in arg1 section 
 
   ; not tested hash yet, after testing move this variable to mServices_config.mrc
-  var %ms.db.type ini
+  var %ms.db.type hash
   ;var %ms.db.type hash
-
   if ( $2 ) {
     if ( $2 == s ) { var %db.file ms.ial.ini | var %db.topic servers | var %db.hash servers }
     elseif ( $2 == c ) { var %db.file ms.ial.ini | var %db.topic clients | var %db.hash clients }
     elseif ( $2 == ch ) { var %db.file ms.ial.ini | var %db.topic channels | var %db.hash channels }
-    elseif ( $2 == l ) { var %db.file ms.ial.ini | var %db.topic list }
+    elseif ( $2 == l ) { var %db.file ms.ial.ini | var %db.topic list | var %db.hash list }
     else { var %db.file $+($2,.ini) | var %db.hash $2 }
 
     var %db.arg1 $3 ,%db.arg2 $4-
@@ -370,7 +385,14 @@ alias ms.db {
       }
       else { remini %db.file %db.topic }
     }
+    elseif ( $1 == search ) && ( %ms.db.type == hash ) {
+      if ( $hfind($2,$+($chr(42),$3,$chr(42)),1,w).data ) { return $v1 }
+      else { return $null }
+    }
     else { ms.echo red DB error, missing read\write or rem\del: $1- }
   }
+
+  elseif ( $1 == save ) && ( %ms.db.type == hash ) { hsave -i servers ms.ial.ini servers | hsave -i clients ms.ial.ini clients | hsave -i channels ms.ial.ini channels | hsave -i list ms.ial.ini list }
+
   else { ms.echo red DB error, missing atleast topic: $1- }
 }

@@ -50,10 +50,3 @@ alias ms.unload.banana {
     ms.servicebot.despawn %ms.banana.numeric 
   }
 }
-alias ms.fishbot.invite {
-  var %chan $3
-  var %nick $1
-  if ( $istok(%ms.fishbot.channels,%chan,44) ) { mServices.raw %ms.fishbot.numeric J %chan }
-  else { mServices.raw %ms.fishbot.numeric J %chan | set %ms.fishbot.channels $addtok(%ms.fishbot.channels,%chan,44) }
-}
-

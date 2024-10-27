@@ -1,4 +1,5 @@
 * Check if received SERVER info is correct  
+- Add mServices.server to db
 
 * Make a db of linked servers in S messages
 * Use db of linked servers to find all servers doing a Squit 

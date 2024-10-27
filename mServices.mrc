@@ -45,6 +45,7 @@ on *:sockopen:mServices:{
   set %ms.numeric $inttobase64($mServices.config(numeric),2)
   var %ms.maxcon $inttobase64($mServices.config(maxcon),3)
   set %ms.startime $ctime
+  set %ms.status linking
 
   ms.echo blue [mServices mIRC Server] Connecting to $mServices.config(serverName) ( %ms.numeric )
   mServices.raw PASS $+(:,$mServices.config(password))
@@ -63,6 +64,7 @@ on *:sockread:mServices:{
 
   if ($sockerr > 0) {
     ms.echo red [Sockread] : $sockname closed due to error ( $sockerr )
+    set %ms.status failed to link
     sockclose $sockname
   }
   if ( $mServices.config(rawdebug) == true ) { ms.echo orange [Sockread Server] --> $1- }
@@ -71,6 +73,7 @@ on *:sockread:mServices:{
   if ($istok(EB EOB_ACK,$2,32) == $true) && ( %ms.myhub == $1 ) {
     mServices.sraw EA
     ms.echo blue [mServices mIRC Server] Received response with EB and sending EA
+    set %ms.status burst finished
     return
   }
   elseif ($istok(EB EOB_ACK,$2,32) == $true) && ( $1 != %ms.myhub) {
@@ -83,6 +86,7 @@ on *:sockread:mServices:{
     ms.echo blue [mServices mIRC Server] Received Acknowledge the end of burst
     ms.echo blue [mServices mIRC Server] Starting to load services
     ms.load.servicebot spybot,fishbot,banana
+    set %ms.status linked
     return
   }
 
@@ -95,6 +99,7 @@ on *:sockread:mServices:{
   if ($istok(PASS,$1,32) == $true) { 
     if ( $mid($2,2,99) == $mServices.config(password) ) { 
       ms.echo blue [mServices mIRC Server] Received response with PASS
+      set %ms.status identifying pass
       return
     }
     else { 
@@ -109,6 +114,7 @@ on *:sockread:mServices:{
     ; TODO: check if server name is correct and server numeric doesnt crash with us
     ms.echo blue [mServices mIRC Server] Received response with SERVER
     ms.newserver $1-
+    set %ms.status bursting
     return
   }
   elseif ($istok(S,$2,32) == $true) {
@@ -119,9 +125,37 @@ on *:sockread:mServices:{
   elseif ($istok(SQ SQUIT,$2,32) == $true) {
     ; TODO remove clients connected to the server sending SQ, also all leaf servers for that server, sooo good luck with that
     ; Read SQuit, this might be a little related (use ms.client.quit or something)
+
+    if ( $1 == %ms.numeric ) { ms.echo green [mServices mIRC Server] Stopped server }
+    ; Some server sq, try find out who
+    else { 
+      set %ms.sq.server $3 | set %ms.sq.num 0 | set %ms.sq.servers $ms.db(read,l,servers)
+      unset %ms.sq.alive 
+      mServices.sraw LI
+    }
     return
   }
-
+  ; <numeric> <raw numeric> <my numeric> <leaf name> <hub name> :<Desc>
+  elseif ($istok(IA,$3,32) == $true) {
+    if ( $2 == 364 ) { 
+      ;$ms.db(search,servers,name SERVER.NAME)
+      if ( $4 == %mServices.serverName ) { return }
+      set %ms.sq.alive $addtok(%ms.sq.alive,$ms.db(search,servers,name $4),32)
+      set %ms.sq.servers $remtok(%ms.sq.servers,$ms.db(search,servers,name $4),32)
+      inc %ms.sq.num
+    }
+    ; End of LA 
+    elseif ( $2 == 365 ) { 
+      if ( $numtok($ms.db(read,l,servers),32) <= %ms.sq.num ) { echo -a ALL SERVERS ARE ALIVE $numtok($ms.db(read,l,servers),32) <= %ms.sq.num }
+      else { 
+        echo -a NOT ALL SERVERS ARE ALIVE $numtok($ms.db(read,l,servers),32) <= %ms.sq.num
+        echo Alive: %ms.sq.alive - DB: $ms.db(read,l,servers)
+        echo Dead: %ms.sq.servers 
+      }
+      unset %ms.sq.alive %ms.sq.servers %ms.sq.server %ms.sq.num 
+    }
+    return
+  }
   ; <server numeric> <AC|ACCOUNT>
   elseif ($istok(AC ACCOUNT,$2,32) == $true) {
     ; TODO, this is for account stuff
@@ -136,7 +170,7 @@ on *:sockread:mServices:{
 
   ; <server numeric> <B|BURST> <chan> <createtime??> <+chanmodes> BbACg,AoAAH,AzAAE,ABAAv:o,BWAAA,AzAAC,AzAAA,BdAAA
   elseif ($istok(B BURST,$2,32) == $true) {
-    ms.burstchannels $3-
+    ms.burstchannels $1-
     return
   }
 
@@ -186,7 +220,7 @@ on *:sockread:mServices:{
     if ((%mServices.fishbot.loaded == true) && ($4 == %ms.fishbot.numeric)) || ((%mServices.banana.loaded == true) && ($4 == %ms.banana.numeric)) { 
       ms.servicebot.kicked $4 $3
     }
-    ms.client.part $4 $3
+    ms.client.part $4 $3 kicked
     return
   }
 
@@ -203,8 +237,8 @@ on *:sockread:mServices:{
 
   ; <client numeric> <I|INVITE> <target nick> <target chan> <someID>
   elseif ($istok(I INVITE,$2,32) == $true) {
-    if ( %mServices.fishbot.loaded == true ) { 
-      ms.fishbot.invite $1 $3 $4
+    if ((%mServices.fishbot.loaded == true) && ($3 == fishbot)) || ((%mServices.banana.loaded == true) && ($3 == banana)) { 
+      ms.servicebot.invited $1 $3 $4
     }
     return
   }
@@ -242,12 +276,14 @@ on *:sockread:mServices:{
   ; <numeric> RI|V|R <server numeric> ; This is just som misc stuff
   elseif ($istok(V R A,$2,32) == $true) { return }
 
-  ; <client numeric> W|WHOIS <target numeric> :<target nick>
+  ; <client numeric> W|WHOIS <target srvnum> :<target nick>
   elseif ( $istok(W,$2,32) == $true ) {
     mServices.sraw 311 $1 $mid($4,2,99) %ms. [ $+ [ $mid($4,2,99) ] ] [ $+ [ .user ] ] %ms. [ $+ [ $mid($4,2,99) ] ] [ $+ [ .host ] ] %ms. [ $+ [ $mid($4,2,99) ] ] [ $+ [ .realname ] ]
     ; mServices.sraw 313 $1 $mid($4,2,99) :is an IRC Operator
+    if ( $mid($4,2,99) == %ms.fishbot.nick ) || ( $mid($4,2,99) == %ms.banana.nick ) { 
+      mServices.sraw 319 $1 $mid($4,2,99) $ms.db(read,l,%ms. [ $+ [ $mid($4,2,99) ] ] [ $+ [ .numeric ] ])
+    }
     mServices.sraw 312 $1 $mid($4,2,99) nakaservices.deepnet.chat A mIRC Services server
-    ; here show the channels the user is in (for fishbot and banana, not X *doh*) - Except +s\+p channels 
     ; mServices.sraw 330 $1 $mid($4,2,99) AUTHNAME :is logged in as
     mServices.sraw 317 $1 $mid($4,2,99) 0 %ms.startime :seconds idle, signon time
     mServices.sraw 318 $1 $mid($4,2,99) :End of /WHOIS list.
