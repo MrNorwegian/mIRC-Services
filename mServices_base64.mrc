@@ -25,6 +25,19 @@ alias inttobase64 {
   }
   return %o
 }
+
+alias base64toip {
+  var %encoded = $1
+  var %num = $base64toint(%encoded)
+
+  var %ip1 = $calc(%num // 16777216)
+  var %ip2 = $calc((%num // 65536) % 256)
+  var %ip3 = $calc((%num // 256) % 256)
+  var %ip4 = $calc(%num % 256)
+
+  return $+(%ip1,.,%ip2,.,%ip3,.,%ip4)
+}
+
 alias ms.picknumeric { 
   var %tmpnumeric %ms.client.numeric
   inc %ms.client.numeric
@@ -46,6 +59,6 @@ alias listnumerics {
   while (%x < %n) { 
     var %r $gettok(%c,%x,32)
     echo -a Numeric list - Server numeric: $mid(%r,1,2)  Client numeric: $mid(%r,3,4) Base64 Numeric: $base64toint($mid(%r,3,4))
-  inc %x 
+    inc %x 
   }
 }

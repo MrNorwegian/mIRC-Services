@@ -5,13 +5,18 @@ on *:unload:{
   unload -rs scripts/mIRC-Services/mServices_commands.mrc
   unload -rs scripts/mIRC-Services/mServices_botcommands.mrc
   ; Optional modules
-  unload -rs scripts/mIRC-Services/mServices_fishbot.mrc
+  unload -rs scripts/mIRC-Services/mServices_funbots.mrc
   unload -rs scripts/mIRC-Services/mServices_spybot.mrc
+
+  ; Undernet GNUWorld services
+  ; unload -rs scripts/mIRC-Services/mServices_cservice.mrc
+  ; unload -rs scripts/mIRC-Services/mServices_ccontrol.mrc
   ; unload -rs scripts/mIRC-Services/mServices_chanfix.mrc
+
+  ; Atheme services
   ; unload -rs scripts/mIRC-Services/mServices_operserv.mrc
   ; unload -rs scripts/mIRC-Services/mServices_nickserv.mrc
   ; unload -rs scripts/mIRC-Services/mServices_chanserv.mrc
-  ; unload -rs scripts/mIRC-Services/mServices_gnuworldX.mrc
   ; unload -rs scripts/mIRC-Services/mServices_newservQ.mrc
   ; unload -rs scripts/mIRC-Services/mServices_newservL.mrc
   ; TODO remove db files if any
@@ -23,13 +28,18 @@ on *:load:{
   load -rs scripts/mIRC-Services/mServices_commands.mrc
   load -rs scripts/mIRC-Services/mServices_botcommands.mrc
   ; Optional modules
-  load -rs scripts/mIRC-Services/mServices_fishbot.mrc
+  load -rs scripts/mIRC-Services/mServices_funbots.mrc
   load -rs scripts/mIRC-Services/mServices_spybot.mrc
+
+  ; Undernet GNUWorld services
+  ; load -rs scripts/mIRC-Services/mServices_cservice.mrc
+  ; load -rs scripts/mIRC-Services/mServices_ccontrol.mrc
   ; load -rs scripts/mIRC-Services/mServices_chanfix.mrc
+
+  ; Atheme services
   ; load -rs scripts/mIRC-Services/mServices_operserv.mrc
   ; load -rs scripts/mIRC-Services/mServices_nickserv.mrc
   ; load -rs scripts/mIRC-Services/mServices_chanserv.mrc
-  ; load -rs scripts/mIRC-Services/mServices_gnuworldX.mrc
   ; load -rs scripts/mIRC-Services/mServices_newservQ.mrc
   ; load -rs scripts/mIRC-Services/mServices_newservL.mrc
   ms.echo green Finished loaded modules
@@ -62,12 +72,14 @@ on *:sockread:mServices:{
   sockread %mServices.sockRead
   tokenize 32 %mServices.sockRead
 
+  if ( $mServices.config(rawdebug) == true ) { ms.echo orange [Sockread Server] --> $1- | ms.spybot.debug $1- }
+
   if ($sockerr > 0) {
     ms.echo red [Sockread] : $sockname closed due to error ( $sockerr )
     set %ms.status failed to link
     sockclose $sockname
+    halt
   }
-  if ( $mServices.config(rawdebug) == true ) { ms.echo orange [Sockread Server] --> $1- }
 
   ; Sending Acknowledge the end of burst
   if ($istok(EB EOB_ACK,$2,32) == $true) && ( %ms.myhub == $1 ) {
@@ -85,7 +97,7 @@ on *:sockread:mServices:{
   if ($istok(EA,$2,32) == $true) && ( %ms.myhub == $1 ) {
     ms.echo blue [mServices mIRC Server] Received Acknowledge the end of burst
     ms.echo blue [mServices mIRC Server] Starting to load services
-    ms.load.servicebot spybot,fishbot,banana
+    ms.start.servicebots $mServices.config(servicebots)
     set %ms.status linked
     return
   }
@@ -135,8 +147,9 @@ on *:sockread:mServices:{
     }
     return
   }
+
   ; <numeric> <raw numeric> <my numeric> <leaf name> <hub name> :<Desc>
-  elseif ($istok(IA,$3,32) == $true) {
+  if (%ms.sq.servers) && ( $istok(364 365,$2,32) ) {
     if ( $2 == 364 ) { 
       ;$ms.db(search,servers,name SERVER.NAME)
       if ( $4 == %mServices.serverName ) { return }
@@ -156,11 +169,13 @@ on *:sockread:mServices:{
     }
     return
   }
+
   ; <server numeric> <AC|ACCOUNT>
   elseif ($istok(AC ACCOUNT,$2,32) == $true) {
     ; TODO, this is for account stuff
     return
   }
+
   ; <server numeric> <N|NICK> <nick> <hop count> <timestamp> <user> <host> <modes> <base64 ip> <clientnumeric> :<real name>
   elseif ($istok(N NICK,$2,32) == $true) {
     ; This also applies to nickchanges
@@ -196,7 +211,10 @@ on *:sockread:mServices:{
   ; <client numeric> <M|MODE> <channel> <:+-modes> <client numerics> <timestamp>
   ; <client numeric> <M|MODE> <client nick> <:+-modes> 
   elseif ($istok(M MODE,$2,32) == $true) {
-    ; TODO set modes, NOTE: this is for channels AND clients !
+    ; echo ascii for #
+    if ( $left($3,1) == 35 ) { ms.mode.channel $1 $3 $4 $5 }
+    else { ms.mode.client $1 $3 $4 }
+
     return
   }
 
@@ -205,47 +223,41 @@ on *:sockread:mServices:{
     ; TODO set topic
     return
   }
+
   ; <client numeric> <OM|OPMODE> <channel> <modes> <params\client numerics>
   elseif ($istok(OM OPMODE,$2,32) == $true) {
     ; TODO set modes, NOTE: this is for channels AND clients !, use same alias as mode above?
     return
   }
+
   ; <numeric> <GL|GLINE> * <+-user@host> <TimeRemaining> 1728501501 1728504799 <:REASON>
   elseif ($istok(GL GLINE,$2,32) == $true) {
     ; TODO set\remove gline
     return
   }
-  ; <client numeric> <K|KICK> <channel> <kicked client numeric> :reason
+
+  ; <client numeric> <K|KICK> <channel> <target nicknumeric> :reason
   elseif ($istok(K KICK,$2,32) == $true) {
-    if ((%mServices.fishbot.loaded == true) && ($4 == %ms.fishbot.numeric)) || ((%mServices.banana.loaded == true) && ($4 == %ms.banana.numeric)) { 
-      ms.servicebot.kicked $4 $3
-    }
-    ms.client.part $4 $3 kicked
+    ms.servicebot.kicked $1 $3 $4
+    ms.client.part $4 $3 kicked $1 $5
     return
   }
 
   ; <client numeric> <P|Privmsg> <targetchan\targetclient numeric> :<message>
   elseif ($istok(P PRIVMSG,$2,32) == $true) {
-    if ( %mServices.fishbot.loaded == true ) && ( $istok(%ms.fishbot.channels,$3,44) ) { 
-      ms.servicebot.text $1-
-    }
-    elseif ( %mServices.fishbot.loaded == true ) && ( %ms.fishbot.numeric == $3 ) { 
-      ms.servicebot.privmsg $1-
-    }
+    ms.servicebot.privmsg $1 $3-
     return
   }
 
   ; <client numeric> <I|INVITE> <target nick> <target chan> <someID>
   elseif ($istok(I INVITE,$2,32) == $true) {
-    if ((%mServices.fishbot.loaded == true) && ($3 == fishbot)) || ((%mServices.banana.loaded == true) && ($3 == banana)) { 
-      ms.servicebot.invited $1 $3 $4
-    }
+    ms.servicebot.invited $1 $3 $4 $5
     return
   }
 
   ; <client numeric> <Q|QUIT> :<reason>
   elseif ($istok(Q QUIT,$2,32) == $true) {
-    ms.client.quit $1
+    ms.client.quit $1 $3-
     return
   }
 
@@ -274,19 +286,13 @@ on *:sockread:mServices:{
   }
 
   ; <numeric> RI|V|R <server numeric> ; This is just som misc stuff
-  elseif ($istok(V R A,$2,32) == $true) { return }
+  ; O = channotice ??
+  elseif ($istok(V R A O,$2,32) == $true) { return }
 
   ; <client numeric> W|WHOIS <target srvnum> :<target nick>
   elseif ( $istok(W,$2,32) == $true ) {
-    mServices.sraw 311 $1 $mid($4,2,99) %ms. [ $+ [ $mid($4,2,99) ] ] [ $+ [ .user ] ] %ms. [ $+ [ $mid($4,2,99) ] ] [ $+ [ .host ] ] %ms. [ $+ [ $mid($4,2,99) ] ] [ $+ [ .realname ] ]
-    ; mServices.sraw 313 $1 $mid($4,2,99) :is an IRC Operator
-    if ( $mid($4,2,99) == %ms.fishbot.nick ) || ( $mid($4,2,99) == %ms.banana.nick ) { 
-      mServices.sraw 319 $1 $mid($4,2,99) $ms.db(read,l,%ms. [ $+ [ $mid($4,2,99) ] ] [ $+ [ .numeric ] ])
-    }
-    mServices.sraw 312 $1 $mid($4,2,99) nakaservices.deepnet.chat A mIRC Services server
-    ; mServices.sraw 330 $1 $mid($4,2,99) AUTHNAME :is logged in as
-    mServices.sraw 317 $1 $mid($4,2,99) 0 %ms.startime :seconds idle, signon time
-    mServices.sraw 318 $1 $mid($4,2,99) :End of /WHOIS list.
+    var %tnick $mid($4,2,99)
+    ms.servicebot.whois $1 $2 %tnick
     return
   }
 

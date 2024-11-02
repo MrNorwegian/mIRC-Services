@@ -1,20 +1,17 @@
-* Check if received SERVER info is correct  
-- Add mServices.server to db
-
 * Make a db of linked servers in S messages
 * Use db of linked servers to find all servers doing a Squit 
 * Quit all users on squit servers (and part all it's channels)
 
 * Redo ms.load.* and ms.unload.* to be more dynamic
-- Finsh ms.load.servicebot <fishbot,spybot,banana> 
-- Save bot settings in a .ini file
+- When J,L,P messages run it thru ms.servicebots.join\leave\privmsg to and loop thru %ms.servicebots.online  to see if any of the bots is interessed ?
+- For now i'm calling ms.spybot.report directly in mServices_command, but i want to run it thru some other thing, so if spybot scipt file is NOT loaded and ms.spybot.report doest not exist...
 
-* Save server settings in a .ini file (cleans up variables)
+* Rename ms.servicebot.invited and ms.servicebot.kicked to ms.servicebot.p10.invited and ms.servicebot.p10.kicked
+- And maby more stuff ? It's for passing p10 messages to modules 
 
 * Manage M and OM (mode and opmode)
 - do a little test, M is for both usermode and chanmode, dunno with opmode
+- Must sort +w-i etc and add\remove from database
 
 * make some shortcuts for getting info 
-- ms.getnick $gettok($ms.db(read,c,%ms.nc.num),2,44)
-- ms.getmodes $gettok($ms.db(read,c,%ms.nc.num),7,44)
-- etc
+- ms.getmodes for a channel and user ?

@@ -19,11 +19,8 @@ alias mServices.start {
 }
 alias mServices.stop {
   if ($sock(mServices) == $null) { ms.echo orange Server is not running | return }
-  ; make ms.unload.servicebot <fishbot|spybot|banana> (same with load)
   ms.echo green[mServices mIRC Server] Stopping the server
-  ms.unload.fishbot
-  ms.unload.banana
-  ms.unload.spybot
+  ms.stop.servicebots $mServices.config(servicebots)
   mServices.sraw SQ %mServices.serverName now :Server shutdown
   sockclose $sock(mServices) 
 }
@@ -56,13 +53,13 @@ alias ms.newclient {
         var %ms.nc.auth $gettok($9,1,58)
         var %ms.nc.base64ip $10
         var %ms.nc.num $11
-        var %ms.nc.realname $mid($12,2,99)
+        var %ms.nc.realname $mid($12-,2,99)
       }
       else {
         var %ms.nc.auth NONE
         var %ms.nc.base64ip $9
         var %ms.nc.num $10
-        var %ms.nc.realname $mid($11,2,99)
+        var %ms.nc.realname $mid($11-,2,99)
       }
     }
     else {
@@ -70,9 +67,8 @@ alias ms.newclient {
       var %ms.nc.auth NONE
       var %ms.nc.base64ip $8
       var %ms.nc.num $9
-      var %ms.nc.realname $mid($10,2,99)
+      var %ms.nc.realname $mid($10-,2,99)
     }
-
     ms.db write c %ms.nc.num srvnum %ms.nc.srvnum
     ms.db write c %ms.nc.num $addtok($ms.db(read,c,%ms.nc.num),nick %ms.nc.nick,44)
     ms.db write c %ms.nc.num $addtok($ms.db(read,c,%ms.nc.num),hopcount %ms.nc.hopcount,44)
@@ -87,9 +83,10 @@ alias ms.newclient {
     ; note the clients to it's server, not that important but might be useful
     ; AND this is bugy, max 5500 clients due to max line length in .ini files (dunno in hash)
     ; use $numtok and make list2, list3 etc, or abondon this idea and use $hget() instead to get number of clients (does not work with ini db)
-    if (!$istok($ms.db(read,l,%ms.nc.srvnum),%ms.nc.num,32)) { 
-      ms.db write l %ms.nc.srvnum $addtok($ms.db(read,l,%ms.nc.srvnum),%ms.nc.num,32)
+    if (!$istok($ms.db(read,l,%ms.nc.srvnum),%ms.nc.num,44)) { 
+      ms.db write l %ms.nc.srvnum $addtok($ms.db(read,l,%ms.nc.srvnum),%ms.nc.num,44)
     }
+    if ( %ms.spybot.report == true ) { ms.spybot.report N %ms.nc.srvnum %ms.nc.nick %ms.nc.hopcount %ms.nc.timestamp %ms.nc.user %ms.nc.host %ms.nc.modes %ms.nc.auth %ms.nc.base64ip %ms.nc.num %ms.nc.realname }
   }
   elseif ( $ms.db(read,c,$1,nick) ) {
     var %ms.nc.num $1
@@ -140,9 +137,9 @@ alias ms.newserver {
   ms.db write s %ms.ns.num $addtok($ms.db(read,s,%ms.ns.num),desc %ms.ns.desc,44)
 
   ; Is the server already in the database? whops that shouldnt happen :(
-  if (!$istok($ms.db(read,l,servers),%ms.ns.num,32)) { ms.db write l servers $addtok($ms.db(read,l,servers),%ms.ns.num,32) }
+  if (!$istok($ms.db(read,l,servers),%ms.ns.num,44)) { ms.db write l servers $addtok($ms.db(read,l,servers),%ms.ns.num,44) }
 
-  if ( %ms.spybot.report == true ) { ms.spybot.report N %ms.ns.num %ms.ns.name %ms.ns.hop %ms.ns.starttime %ms.ns.linktime %ms.ns.protocol %ms.ns.maxcon %ms.ns.flags %ms.ns.desc }
+  if ( %ms.spybot.report == true ) { ms.spybot.report S %ms.ns.num %ms.ns.name %ms.ns.hop %ms.ns.starttime %ms.ns.linktime %ms.ns.protocol %ms.ns.maxcon %ms.ns.flags %ms.ns.desc }
   return
 }
 
@@ -155,55 +152,55 @@ alias ms.newserver {
 ; <Server numeric> B <chan> <createtime> [chanmode] [nick numerics]
 
 alias ms.burstchannels {
-  var %ms.bc.chan $1
-  var %ms.bc.createtime $2
+  var %ms.bc.chan $3
+  var %ms.bc.createtime $4
   ; if + isin $3
-  if ( $left($3,1) == $chr(43) ) { 
-    var %ms.bc.chanmodes $3
-    if ( l isin $3 ) && ( k !isin $3 ) {
-      var %ms.bc.chanlimit $4
+  if ( $left($5,1) == $chr(43) ) { 
+    var %ms.bc.chanmodes $5
+    if ( l isin $5 ) && ( k !isin $5 ) {
+      var %ms.bc.chanlimit $6
       var %ms.bc.chankey NONE
-      var %ms.bc.clients $5
-      var %ms.bc.bans $iif($6,$6-,NONE)
+      var %ms.bc.clients $7
+      var %ms.bc.bans $iif($8,$8-,NONE)
     }
-    elseif ( k isin $3 ) && ( l !isin $3 ) {
+    elseif ( k isin $5 ) && ( l !isin $5 ) {
       var %ms.bc.chanlimit NONE
-      ; This, if someone sets NONE as key, will it be a problem?
-      var %ms.bc.chankey $4
-      var %ms.bc.clients $5
-      var %ms.bc.bans $iif($6,$6-,NONE)
+      ; TODO: if someone sets NONE as key, will it be a problem?
+      var %ms.bc.chankey $6
+      var %ms.bc.clients $7
+      var %ms.bc.bans $iif($8,$8-,NONE)
     }
-    elseif ( k isin $3 ) && ( l isin $3 ) {
-      ; This, if someone sets NONE as key, will it be a problem?
-      var %ms.bc.chankey $5
-      var %ms.bc.chanlimit $4
-      var %ms.bc.clients $6
-      var %ms.bc.bans $iif($7,$7-,NONE)
+    elseif ( k isin $5 ) && ( l isin $5 ) {
+      ; TODO: if someone sets NONE as key, will it be a problem?
+      var %ms.bc.chankey $7
+      var %ms.bc.chanlimit $6
+      var %ms.bc.clients $8
+      var %ms.bc.bans $iif($9,$9-,NONE)
     }
     else { 
       var %ms.bc.chanlimit NONE
       var %ms.bc.chankey NONE
-      var %ms.bc.clients $4
-      var %ms.bc.bans $iif($5,$5-,NONE)
+      var %ms.bc.clients $6
+      var %ms.bc.bans $iif($7,$7-,NONE)
     }
   }
   else {
     var %ms.bc.chanmodes NONE 
     var %ms.bc.chanlimit NONE
     var %ms.bc.chankey NONE
-    var %ms.bc.clients $3
-    var %ms.bc.bans $iif($4,$4-,NONE)
+    var %ms.bc.clients $5
+    ; TODOO: Remove : from first ban
+    var %ms.bc.bans $iif($6,$6-,NONE)
   }
 
-  if (!$istok($ms.db(read,l,channels),%ms.bc.chan,32)) { ms.db write l channels $addtok($ms.db(read,l,channels),%ms.bc.chan,32) }
+  if (!$istok($ms.db(read,l,channels),%ms.bc.chan,44)) { ms.db write l channels $addtok($ms.db(read,l,channels),%ms.bc.chan,44) }
   ms.db write ch %ms.bc.chan createtime %ms.bc.createtime
   ms.db write ch %ms.bc.chan $addtok($ms.db(read,ch,%ms.bc.chan),chanmodes %ms.bc.chanmodes,44)
   ms.db write ch %ms.bc.chan $addtok($ms.db(read,ch,%ms.bc.chan),chanlimit %ms.bc.chanlimit,44)
   ms.db write ch %ms.bc.chan $addtok($ms.db(read,ch,%ms.bc.chan),chankey %ms.bc.chankey,44)
   ms.db write ch %ms.bc.chan $addtok($ms.db(read,ch,%ms.bc.chan),bans %ms.bc.bans,44)
   ms.db write l %ms.bc.chan %ms.bc.clients
-  
-  
+
   ; Loop clientnumerics and list then 
   var %i 1
   var %ms.bc.cnl $numtok(%ms.bc.clients,44)
@@ -221,7 +218,7 @@ alias ms.burstchannels {
     elseif ( %ms.bc.oped == true ) && ( %ms.bc.voiced != true ) { var %tmp.users $iif($gettok(%c,2,58) == o,$addtok(%tmp.users,%c,44),$addtok(%tmp.users,$+(%c,$chr(58),o),44))  }
     elseif ( %ms.bc.voiceandop == true ) { var %tmp.users $iif($gettok(%c,2,58) == vo,$addtok(%tmp.users,%c,44),$addtok(%tmp.users,$+(%c,$chr(58),vo),44)) }
     else { var %tmp.users $addtok(%tmp.users,%c,44) }
-    ms.db write l $gettok(%c,1,58) $addtok($ms.db(read,l,%c),%ms.bc.chan,32)
+    ms.db write l $gettok(%c,1,58) $addtok($ms.db(read,l,%c),%ms.bc.chan,44)
     inc %i
   }
   ms.db write l %ms.bc.chan %tmp.users
@@ -238,15 +235,16 @@ alias ms.channel.create {
     ms.db write ch %ch createtime %ms.cc.timestamp
     ms.db write ch %ch $addtok($ms.db(read,ch,%ch),$+(chanmodes NONE,$chr(44),chanlimit NONE,$chr(44),chankey NONE,$chr(44),bans NONE),44)
     ms.db write l %ch $+(%ms.cc.num,$chr(58),o)
-    ms.db write l %ms.cc.num $addtok($ms.db(read,l,%ms.cc.num),%ch,32)
+    ms.db write l %ms.cc.num $addtok($ms.db(read,l,%ms.cc.num),%ch,44)
 
-    if (!$istok($ms.db(read,l,channels),%ch,32)) { ms.db write l channels $addtok($ms.db(read,l,channels),%ch,32) }
+    if (!$istok($ms.db(read,l,channels),%ch,44)) { ms.db write l channels $addtok($ms.db(read,l,channels),%ch,44) }
     ms.echo blue [IAL DB] Client %ms.cc.num created %ch
+    ms.servicebot.p10.chcreated %ms.cc.num %ch
     dec %c 
   }
-  if ( %ms.spybot.report == true ) { ms.spybot.report C %ms.cc.num %ms.cc.chan }
   return
 }
+
 alias ms.client.join {
   var %ms.cj.num $1
   var %ms.cj.chan $2
@@ -258,20 +256,15 @@ alias ms.client.join {
     ; Check if nick was already in the channel *whoops*
     if (!$istok($ms.db(read,l,%ch),%ms.cj.num,44) ) { 
       ms.db write l %ch $addtok($ms.db(read,l,%ch),%ms.cj.num,44)
-      ms.db write l %ms.cj.num $addtok($ms.db(read,l,%ms.cj.num),%ch,32)
+      ms.db write l %ms.cj.num $addtok($ms.db(read,l,%ms.cj.num),%ch,44)
       ms.echo blue [IAL DB] Client %ms.cj.num joined %ch
     }
 
     dec %c
   }
-  if ( %ms.spybot.report == true ) { ms.spybot.report J %ms.cj.num %ms.cj.chan }
+  ms.servicebot.p10.chjoined %ms.cj.num %ms.cj.chan
   return
 }
-
-; Gather part and kicked to one alias
-; dec $ms.db(read,ch,%ms.cj.channel,clieclients)
-; remove channel if empty
-; remove client from voiced or oped
 
 alias ms.client.part {
   var %ms.cl.num $1
@@ -283,7 +276,7 @@ alias ms.client.part {
     if ( $numtok($ms.db(read,l,%ch),44) <= 1 ) { 
       ms.db rem ch %ch
       ms.db rem l %ch
-      ms.echo blue [IAL DB] Removed channel %ms.cl.tmpch
+      ms.echo blue [IAL DB] Removed channel %ch
     }
     ; Part the client from channel
     else {
@@ -294,38 +287,68 @@ alias ms.client.part {
       else { ms.db write l %ch $remtok(%n,%ms.cl.num,44) }
     }
     ; Check if this was the last channel for the client
-    if ( $istok($ms.db(read,l,%ms.cl.num),%ch,32) <= 1 ) { ms.db rem l %ms.cl.num }
-    else { ms.db write l %ms.cl.num $remtok($ms.db(read,l,%ms.cl.num),%ch,32) }
-    ms.db write l channels $remtok($ms.db(read,l,channels),%ms.cl.chan,32)
-    ms.echo blue [IAL DB] Client %ms.cl.num parted channel %ms.cl.tmpch
+    if ( $istok($ms.db(read,l,%ms.cl.num),%ch,44) <= 1 ) { ms.db rem l %ms.cl.num }
+    else { ms.db write l %ms.cl.num $remtok($ms.db(read,l,%ms.cl.num),%ch,44) }
+    ms.db write l channels $remtok($ms.db(read,l,channels),%ch,44)
+    ms.echo blue [IAL DB] Client %ms.cl.num parted channel %ch
+    ms.servicebot.p10.chparted $1 %ch $iif($3,$3,$null)
     dec %c
   }
-  if ( %ms.spybot.report == true ) && ( $3 != kicked ) { ms.spybot.report L %ms.cl.num %ms.cl.chan }
-  elseif ( %ms.spybot.report == true ) && ( $3 == kicked ) { ms.spybot.report K %ms.cl.num %ms.cl.chan }
   return
 }
 
 alias ms.client.quit { 
   var %ms.cq.num $1
   var %ms.cq.chans $ms.db(read,l,%ms.cq.num)
-  var %c $numtok(%ms.cq.chans,32)
-  while ( %c ) {
-    ms.client.part %ms.cq.num $gettok(%ms.cq.chans,%c,44)
-    dec %c
-  }
-  ; when join 0 the client is not quiting, i'm using this alias to part all channels
-  if ( $2 != noquit ) { 
-    ; Remove client from server
-    var %ms.cq.srvnum $gettok($gettok($ms.db(read,c,%ms.cq.num),1,44),2,32)
 
-    ; remove client from clients list
+  ; when join 0 the client is not quiting, i'm using this alias to part all channels
+  if ( $2 == noquit ) { 
+    var %c $numtok(%ms.cq.chans,44)
+    while ( %c ) {
+      ms.client.part %ms.cq.num $gettok(%ms.cq.chans,%c,44)
+      dec %c
+    }
+  }
+  else {
+    set -u1 %ms.client.part.quiet. $+ %ms.cq.num true
+    var %c $numtok(%ms.cq.chans,44)
+    while ( %c ) {
+      ms.client.part %ms.cq.num $gettok(%ms.cq.chans,%c,44)
+      dec %c
+    }
+    if ( %ms.spybot.report == true ) { ms.spybot.report Q $1 $2- }
+    var %ms.cq.srvnum $gettok($gettok($ms.db(read,c,%ms.cq.num),1,44),2,32)
     ms.db rem c %ms.cq.num
-    ms.db write l %ms.cq.srvnum $remtok($ms.db(read,l,%ms.cq.srvnum),%ms.cq.num,32)
+    if ( $numtok($ms.db(read,l,%ms.cq.srvnum),44) <= 1 ) { ms.db rem l %ms.cq.srvnum }
+    else { ms.db write l %ms.cq.srvnum $remtok($ms.db(read,l,%ms.cq.srvnum),%ms.cq.num,44) }
     ms.echo blue [IAL DB] Removed client %ms.cq.num from server
   }
-  if ( %ms.spybot.report == true ) { ms.spybot.report Q %ms.cq.num %ms.cq.chans }
   return
 }
+
+; <client numeric> <channel> <:+-modes> <client numerics> <timestamp>
+; <client numeric> <client nick> <:+-modes> 
+
+alias ms.mode.client { 
+  var %ms.mc.num $1
+  var %ms.mc.nick $2
+  var %ms.mc.modes $mid($3,2,99)
+  ms.servicebot.p10.clientmode %ms.mc.num %ms.mc.nick %ms.mc.modes
+  ms.change.client modes $1 %ms.mc.modes
+  return
+}
+alias ms.mode.channel { 
+  var %ms.mc.num $1
+  var %ms.mc.chan $2
+  var %ms.mc.modes $mid($3,2,99)
+  var %ms.mc.clients $4
+  var %ms.mc.timestamp $5
+
+  ; Todo, find channel, loop clients and add\remove modes
+  
+  return
+}
+
 
 alias ms.db.reset {
   ms.echo green Resetting databases
@@ -344,16 +367,65 @@ alias ms.db.reset {
   ; reset client numeric
   set %ms.client.numeric 0
 }
-; $ms.db(read,s,arg1)
-; /ms.db write ch arg1 arg2+
-; /ms.db rem\del c [arg1]
+
+alias ms.get.client { 
+  if ( $ms.db(read,c,$2) ) { 
+    var %msgc $v1
+    if ( $1 == server ) { return $gettok($gettok(%msgc,1,44),2,32) }
+    elseif ( $1 = nick ) { return $gettok($gettok(%msgc,2,44),2,32) }
+    elseif ( $1 == ident ) { return $gettok($gettok(%msgc,5,44),2,32) }
+    elseif ( $1 == host ) { return $gettok($gettok(%msgc,6,44),2,32) }
+    elseif ( $1 == modes ) { return $gettok($gettok(%msgc,7,44),2,32) }
+    elseif ( $1 == auth ) { return $gettok($gettok(%msgc,8,44),2,32) }
+    elseif ( $1 == base64ip ) { return $gettok($gettok(%msgc,9,44),2,32) }
+    elseif ( $1 == realname ) { return $gettok($gettok(%msgc,10,44),2-,32) }
+    else { return $null }
+  }
+}
+alias ms.change.client {
+  if ( $3 ) {
+    if ( $ms.db(read,c,$2) ) { 
+      var %ms.ch.c.data $v1
+      if ( $1 == nick ) { ms.db write c $2 $puttok(%ms.ch.c.data,nick $3,2,44) }
+      elseif ( $1 == ident ) { ms.db write c $2 $puttok(%ms.ch.c.data,ident $3,5,44) }
+      elseif ( $1 == host ) { ms.db write c $2 $puttok(%ms.ch.c.data,host $3,6,44) }
+      elseif ( $1 == modes ) { ms.db write c $2 $puttok(%ms.ch.c.data,modes $3,7,44) }
+      elseif ( $1 == auth ) { ms.db write c $2 $puttok(%ms.ch.c.data,auth $3,8,44) }
+      elseif ( $1 == base64ip ) { ms.db write c $2 $puttok(%ms.ch.c.data,base64ip $3,9,44) }
+      elseif ( $1 == realname ) { ms.db write c $2 $puttok(%ms.ch.c.data,realname $3,10,44) }
+
+
+      else { ms.echo red [Change client] $2 is not a valid argument }
+    }
+    else { ms.echo red [Change client] $1 is not a valid client numeric }
+  }
+  else { ms.echo red [Change client] Missing arguments }
+}
+alias ms.get.server { 
+  if ( $ms.db(read,s,$2) ) { 
+    var %msgs $v1
+    if ( $1 == name ) { return $gettok($gettok(%msgs,1,44),2,32) }
+    elseif ( $1 == hop ) { return $gettok($gettok(%msgs,2,44),2,32) }
+    elseif ( $1 == starttime ) { return $gettok($gettok(%msgs,3,44),2,32) }
+    elseif ( $1 == linktime ) { return $gettok($gettok(%msgs,4,44),2,32) }
+    elseif ( $1 == protocol ) { return $gettok($gettok(%msgs,5,44),2,32) }
+    elseif ( $1 == maxcon ) { return $gettok($gettok(%msgs,6,44),2,32) }
+    elseif ( $1 == flags ) { return $gettok($gettok(%msgs,7,44),2,32) }
+    elseif ( $1 == desc ) { return $gettok($gettok(%msgs,8,44),2-,32) }
+    else { return $null }
+  }
+}
+
 alias ms.db {
+  ; $ms.db(read,s,arg1)
+  ; /ms.db write ch arg1 arg2+
+  ; /ms.db rem\del c [arg1]
 
   ; TODO: add  $ms.db(search,TEXT) to search for a specific value in the database in arg1 section 
 
-  ; not tested hash yet, after testing move this variable to mServices_config.mrc
+  ; TODO: Remove .ini, numerics with [ interfere with the .ini file
+  ; After testing move this variable to mServices_config.mrc and begin sql db testing ?
   var %ms.db.type hash
-  ;var %ms.db.type hash
   if ( $2 ) {
     if ( $2 == s ) { var %db.file ms.ial.ini | var %db.topic servers | var %db.hash servers }
     elseif ( $2 == c ) { var %db.file ms.ial.ini | var %db.topic clients | var %db.hash clients }
@@ -392,7 +464,31 @@ alias ms.db {
     else { ms.echo red DB error, missing read\write or rem\del: $1- }
   }
 
-  elseif ( $1 == save ) && ( %ms.db.type == hash ) { hsave -i servers ms.ial.ini servers | hsave -i clients ms.ial.ini clients | hsave -i channels ms.ial.ini channels | hsave -i list ms.ial.ini list }
-
+  elseif ( $1 == list ) && ( %ms.db.type == hash ) { 
+    var %c $hget(clients,0).data
+    echo $+(Total clients: %c)
+    while (%c) { 
+      echo -a %c $hget(clients,%c).item $hget(clients,%c).data
+      dec %c
+    }
+    var %s $hget(servers,0).data
+    echo $+(Total servers: %s)
+    while (%s) { 
+      echo -a %s $hget(servers,%s).item $hget(servers,%s).data
+      dec %s
+    }
+    var %ch $hget(channels,0).data
+    echo $+(Total channels: %ch)
+    while (%ch) { 
+      echo -a %ch $hget(channels,%ch).item $hget(channels,%ch).data
+      dec %ch
+    }
+    var %l $hget(list,0).data
+    echo $+(Total list: %l)
+    while (%l) { 
+      echo -a %l $hget(list,%l).item $hget(list,%l).data
+      dec %l
+    }
+  }
   else { ms.echo red DB error, missing atleast topic: $1- }
 }
