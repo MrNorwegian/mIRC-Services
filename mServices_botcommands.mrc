@@ -3,10 +3,10 @@ on *:unload: { unset %mServices.loaded.botcommands | ms.echo red Unloaded mServi
 
 alias ms.servicebot.picknumeric { 
   var %tmpnumeric %ms.servicebot.numeric
-  inc %ms.client.numeric
   return $+($inttobase64($mServices.config(numeric),2),$inttobase64(%tmpnumeric,3)) 
 }
 
+; /ms.start.servicebots cservice,spybot,funbots
 alias ms.start.servicebots { 
   var %ms.start.sb $numtok($1,44)
   while ( %ms.start.sb ) { 
@@ -14,6 +14,8 @@ alias ms.start.servicebots {
     dec %ms.start.sb
   }
 }
+
+; /ms.stop.servicebots cservice,spybot,funbots
 alias ms.stop.servicebots { 
   var %ms.stop.sb $numtok($1-,44)
   while ( %ms.stop.sb ) { 
@@ -21,14 +23,18 @@ alias ms.stop.servicebots {
     dec %ms.stop.sb
   }
 }
+
 alias ms.servicebot.spawn {
   if ( $ms.db(read,c,$7) ) { ms.echo red [Service bot] $1 is already spawned, skipping. | return }
   else {
-    ms.echo green [Service bot] Spawn $7 $+($1,!,$3,@,$4,$chr(32)) Ip: $6 with modes: $5
-    mServices.sraw N $1 1 $2 $3 $4 $5 $inttobase64($longip($6),6) $7 $+(:,$8-)
-    ms.newclient $inttobase64($mServices.config(numeric),2) N $1 1 $2 $3 $4 $5 $inttobase64($longip($6),6) $7 $+(:,$8-)
+    ms.echo green [Service bot] Spawn $7 $+($1,!,$3,@,$4,$chr(32)) Auth: $6 Ip: $7 with modes: $8
+    mServices.sraw N $1 1 $2 $3 $4 $5 $inttobase64($longip($7),6) $8 $+(:,$9-)
+    ms.newclient $inttobase64($mServices.config(numeric),2) N $1 1 $2 $3 $4 $5 $inttobase64($longip($7),6) $8 $+(:,$9-)
+    if ( $6 != CHANGE_ME_TO_ENABLE ) { 
+      mServices.sraw AC $8 $replace($6,:,$chr(32))
+      ms.account %ms.numeric AC $8 $replace($6,:,$chr(32))
+    }
 
-    if ( $mServices.config(ac,$1) != CHANGE_ME_TO_ENABLE ) { mServices.sraw AC %ms. [ $+ [ $1 ] ] [ $+ [ .numeric ] ] $v1 }
     set %ms.servicebots.online $addtok(%ms.servicebots.online,$1,44)
   }
 }
@@ -41,6 +47,19 @@ alias ms.servicebot.despawn {
     set %ms.servicebots.online $remtok(%ms.servicebots.online,$1,44)
   }
   else { ms.echo red [Service bot] $1 is not spawned, skipping. | return }
+}
+
+; Add\remove channels from the bot (public channels, so channels the bots have been invited or joined by regular users)
+alias ms.servicebot.addchan { 
+  if ( $2 ) { 
+    writeini -n %mServices.config $1 channels $addtok($ms.config.get(channels,$1),$2,44)
+  }
+}
+alias ms.servicebot.remchan { 
+  if ( $2 ) { 
+    if ( $numtok($ms.config.get(channels,$1),44) >= 1 ) { writeini -n %mServices.config $1 channels $remtok($ms.config.get(channels,$1),$2,44) }
+    else { remini %mServices.config $1 channels }
+  }
 }
 
 alias ms.servicebot.say {
@@ -83,30 +102,41 @@ alias ms.servicebot.kicked {
 
 ; <client numeric> <target srvnum> <target nick>
 alias ms.servicebot.whois {
-  var %tnick $3
-  var %tnum %ms.fb. [ $+ [ $3 ] ] [ $+ [ .numeric ] ]
-  mServices.sraw 311 $1 %tnick $mServices.config(user,%tnick) $mServices.config(host,%tnick) * $mServices.config(realname,%tnick)
+  var %ms.sbwh.num $ms.get.client(numeric,$3)
+  mServices.sraw 311 $1 $3 $ms.get.client(ident,%ms.sbwh.num) $ms.get.client(host,%ms.sbwh.num) * $ms.get.client(realname,%ms.sbwh.num)
   ; Move this to %mServices_funbots.mrc ? Showing channels of the bot
   if ( $istok(%ms.funbots.online,%tnum,44) ) { 
-    mServices.sraw 319 $1 %tnick $replace($mServices.config(channels,%tnick),$chr(44),$chr(32))
+    mServices.sraw 319 $1 $3 $replace($ms.get.client(channels,%ms.sbwh.num),$chr(44),$chr(32))
   }
-  mServices.sraw 312 $1 %tnick $mServices.config(serverName,%tnick) $mServices.config(info,%tnick)
+  mServices.sraw 312 $1 $3 $ms.get.server(name,$ms.get.client(server,%ms.sbwh.num)) $ms.get.server(desc,$ms.get.client(server,%ms.sbwh.num)) 
   ; mServices.sraw 313 $1 %tnick :is an IRC Services bot
-  if ( $mServices.config(ac,%tnick) != CHANGE_ME_TO_ENABLE ) { 
-    mServices.sraw 330 $1 %tnick $v1 :is logged in as
+  if ( $ms.get.client(account,%ms.sbwh.num) != CHANGE_ME_TO_ENABLE ) { 
+    mServices.sraw 330 $1 $3 $v1 :is logged in as
   }
-  mServices.sraw 317 $1 %tnick 0 %ms.startime :seconds idle, signon time
-  mServices.sraw 318 $1 %tnick :End of /WHOIS list.
+  mServices.sraw 317 $1 $3 0 $ms.get.client(timestamp,%ms.sbwh.num) :seconds idle, signon time
+  mServices.sraw 318 $1 $3 :End of /WHOIS list.
+}
+
+; <server numeric> <client numeric> <account id>
+alias ms.servicebot.p10.account { 
+  if ( %mServices.loaded.spybot == true ) { ms.spybot.report AC $1- }
+}
+
+; 
+alias ms.servicebot.p10.srvcreated { 
+  if ( %mServices.loaded.spybot == true ) { ms.spybot.report S $1- }
 }
 
 ; <client numeric> <target chan>
 alias ms.servicebot.p10.chcreated { 
   if ( %mServices.loaded.spybot == true ) { ms.spybot.report C $1- }
 }
+
 ; <client numeric> <target chan>
 alias ms.servicebot.p10.chjoined { 
   if ( %mServices.loaded.spybot == true ) { ms.spybot.report J $1- }
 }
+
 ; <target numeric> <target chan> [kicked <client numeric> <reason>]
 alias ms.servicebot.p10.chparted { 
   if ( %mServices.loaded.spybot == true ) { 
@@ -114,12 +144,20 @@ alias ms.servicebot.p10.chparted {
     else { ms.spybot.report K $1- }
   }
 }
+
 ; <client numeric> <target client numeric> <modes>
 alias ms.servicebot.p10.clientmode { 
   if ( %mServices.loaded.spybot == true ) { ms.spybot.report M $1- }
 }
+
+; <client numeric> <target client numeric> <modes> <nick1 nick2 etc> <timestamp>
+alias ms.servicebot.p10.chanmode { 
+  if ( %mServices.loaded.spybot == true ) { ms.spybot.report M $1- }
+}
+
 ; <client numeric> <targetchan\targetclient numeric> :<message>
-alias ms.servicebot.privmsg { 
+alias ms.servicebot.p10.privmsg { 
   if ( %mServices.loaded.funbots == true ) { ms.funbots.privmsg $1- }
   if ( %mServices.loaded.spybot == true ) { ms.spybot.privmsg $1- } 
+  if ( %mServices.loaded.cservice == true ) { ms.cservice.privmsg $1- }
 }

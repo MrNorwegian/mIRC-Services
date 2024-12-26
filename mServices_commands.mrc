@@ -97,6 +97,17 @@ alias ms.newclient {
   }
   return
 }
+
+; <Server numeric> AC|ACCOUNT <client numeric> <account accountid>
+alias ms.account {
+  var %ms.ac.srvnum $1
+  var %ms.ac.client $3
+  var %ms.ac.account $4 $5
+  ms.change.client account %ms.ac.client %ms.ac.account
+  ms.servicebot.p10.account %ms.ac.srvnum %ms.ac.num %ms.ac.account
+  return
+}
+
 ; leaf <server numeric> S <server name> <hop count> <start time> <link time> <protocol> <server numeric(2)+maxconn(3)> [+flags] :<desc>
 ; myhub SERVER <server name> <hop count> <start time> <link time> <protocol> <server numeric(2)+maxconn(3)> [+flags] :<desc>
 alias ms.newserver {
@@ -139,6 +150,7 @@ alias ms.newserver {
   ; Is the server already in the database? whops that shouldnt happen :(
   if (!$istok($ms.db(read,l,servers),%ms.ns.num,44)) { ms.db write l servers $addtok($ms.db(read,l,servers),%ms.ns.num,44) }
 
+  ; TODO: Move this to ms.servicebot.p10.srvcreated ?
   if ( %ms.spybot.report == true ) { ms.spybot.report S %ms.ns.num %ms.ns.name %ms.ns.hop %ms.ns.starttime %ms.ns.linktime %ms.ns.protocol %ms.ns.maxcon %ms.ns.flags %ms.ns.desc }
   return
 }
@@ -259,7 +271,6 @@ alias ms.client.join {
       ms.db write l %ms.cj.num $addtok($ms.db(read,l,%ms.cj.num),%ch,44)
       ms.echo blue [IAL DB] Client %ms.cj.num joined %ch
     }
-
     dec %c
   }
   ms.servicebot.p10.chjoined %ms.cj.num %ms.cj.chan
@@ -326,62 +337,35 @@ alias ms.client.quit {
   return
 }
 
-; <client numeric> <channel> <:+-modes> <client numerics> <timestamp>
-; <client numeric> <client nick> <:+-modes> 
+; <client numeric> <M|MODE> <channel> <+-modes> <arg1 arg2 arg3 arg4 etc> <timestamp?>
+alias ms.mode.channel { 
+  var %ms.mc.num $1
+  var %ms.mc.chan $2
+  var %ms.mc.modes $3
+  var %ms.mc.args $4-
 
+  ms.change.channel modes %ms.mc.num %ms.mc.chan %ms.mc.modes %ms.mc.args
+  ms.servicebot.p10.chanmode %ms.mc.num %ms.mc.chan %ms.mc.modes %ms.mc.args
+  return
+}
+
+alias ms.change.channel {
+  if ($4) { 
+    return
+  }
+}
+
+; <client numeric> <client nick> <:+-modes> 
 alias ms.mode.client { 
   var %ms.mc.num $1
   var %ms.mc.nick $2
   var %ms.mc.modes $mid($3,2,99)
-  ms.servicebot.p10.clientmode %ms.mc.num %ms.mc.nick %ms.mc.modes
   ms.change.client modes $1 %ms.mc.modes
-  return
-}
-alias ms.mode.channel { 
-  var %ms.mc.num $1
-  var %ms.mc.chan $2
-  var %ms.mc.modes $mid($3,2,99)
-  var %ms.mc.clients $4
-  var %ms.mc.timestamp $5
-
-  ; Todo, find channel, loop clients and add\remove modes
-  
+  ms.servicebot.p10.clientmode %ms.mc.num %ms.mc.nick %ms.mc.modes
   return
 }
 
-
-alias ms.db.reset {
-  ms.echo green Resetting databases
-  ms.db rem s
-  ms.db rem c
-  ms.db rem ch
-  ms.db rem l
-  if ( $hget(servers) ) { hfree servers | hmake -s servers 100 }
-  else { hmake -s servers 100 }
-  if ( $hget(clients) ) { hfree clients | hmake -s clients 10000 }
-  else { hmake -s clients 10000 }
-  if ( $hget(channels) ) { hfree channels | hmake -s channels 1000 }
-  else { hmake -s channels 1000 }
-  if ( $hget(list) ) { hfree list | hmake -s list 10000 }
-  else { hmake -s list 10000 }
-  ; reset client numeric
-  set %ms.client.numeric 0
-}
-
-alias ms.get.client { 
-  if ( $ms.db(read,c,$2) ) { 
-    var %msgc $v1
-    if ( $1 == server ) { return $gettok($gettok(%msgc,1,44),2,32) }
-    elseif ( $1 = nick ) { return $gettok($gettok(%msgc,2,44),2,32) }
-    elseif ( $1 == ident ) { return $gettok($gettok(%msgc,5,44),2,32) }
-    elseif ( $1 == host ) { return $gettok($gettok(%msgc,6,44),2,32) }
-    elseif ( $1 == modes ) { return $gettok($gettok(%msgc,7,44),2,32) }
-    elseif ( $1 == auth ) { return $gettok($gettok(%msgc,8,44),2,32) }
-    elseif ( $1 == base64ip ) { return $gettok($gettok(%msgc,9,44),2,32) }
-    elseif ( $1 == realname ) { return $gettok($gettok(%msgc,10,44),2-,32) }
-    else { return $null }
-  }
-}
+; modes $1 %ms.mc.modes
 alias ms.change.client {
   if ( $3 ) {
     if ( $ms.db(read,c,$2) ) { 
@@ -389,18 +373,70 @@ alias ms.change.client {
       if ( $1 == nick ) { ms.db write c $2 $puttok(%ms.ch.c.data,nick $3,2,44) }
       elseif ( $1 == ident ) { ms.db write c $2 $puttok(%ms.ch.c.data,ident $3,5,44) }
       elseif ( $1 == host ) { ms.db write c $2 $puttok(%ms.ch.c.data,host $3,6,44) }
-      elseif ( $1 == modes ) { ms.db write c $2 $puttok(%ms.ch.c.data,modes $3,7,44) }
+      elseif ( $1 == modes ) { 
+        var %ms.ch.c.mode.old $gettok($gettok(%ms.ch.c.data,7,44),2,32)
+        var %ms.ch.c.mode.new %ms.ch.c.mode.old
+        var %i 1
+        var %len $len($3)
+        while (%i <= %len) {
+          var %char $mid($3,%i,1)
+          if (%char == +) { var %action add }
+          elseif (%char == -) { var %action remove }
+          else {
+            if (%action == add) { 
+              if ( %ms.ch.c.mode.new == NONE ) { var %ms.ch.c.mode.new $+(+,%char) }
+              else { var %ms.ch.c.mode.new $+(%ms.ch.c.mode.new,%char) }
+            }
+            elseif (%action == remove) { 
+              if ( $len(%ms.ch.c.mode.new) <= 2 ) { var %ms.ch.c.mode.new NONE }
+              else { var %ms.ch.c.mode.new $remove(%ms.ch.c.mode.new,%char,32) }
+            }
+          }
+          inc %i
+        }
+        ms.db write c $2 $puttok(%ms.ch.c.data,modes %ms.ch.c.mode.new,7,44)
+      }
+      elseif ( $1 == ac ) { ms.db write c $2 $puttok(%ms.ch.c.data,auth $3,8,44) }
+      elseif ( $1 == account ) { ms.db write c $2 $puttok(%ms.ch.c.data,auth $3,8,44) }
       elseif ( $1 == auth ) { ms.db write c $2 $puttok(%ms.ch.c.data,auth $3,8,44) }
       elseif ( $1 == base64ip ) { ms.db write c $2 $puttok(%ms.ch.c.data,base64ip $3,9,44) }
       elseif ( $1 == realname ) { ms.db write c $2 $puttok(%ms.ch.c.data,realname $3,10,44) }
-
-
       else { ms.echo red [Change client] $2 is not a valid argument }
     }
     else { ms.echo red [Change client] $1 is not a valid client numeric }
   }
   else { ms.echo red [Change client] Missing arguments }
 }
+
+; $ms.get.client(nick,clientNUMERIC) $ms.get.client(modes,clientNUMERIC) $ms.get.client(numeric,clientNICK) etc
+; extept: $ms.get.client(numeric,clientNICK)
+
+alias ms.get.client {
+  if ( $1 == numeric ) && ( $2 ) { 
+    var %ms.get.clnum.i $hfind(clients,$+($chr(42),nick $2,$chr(42)),0,w).data
+    while ( %ms.get.clnum.i ) {
+      var %ms.get.clnum $hfind(clients,$+($chr(42),nick $2,$chr(42)),%ms.get.clnum.i,w).data
+      var %ms.get.clnick $gettok($gettok($ms.db(read,c,%ms.get.clnum),2,44),2,32)
+      if ( %ms.get.clnick == $2 ) { return %ms.get.clnum }
+      dec %ms.get.clnum.i
+    }
+  }
+  elseif ( $ms.db(read,c,$2) ) { 
+    var %msgc $v1
+    if ( $1 == server ) { return $gettok($gettok(%msgc,1,44),2,32) }
+    elseif ( $1 = nick ) { return $gettok($gettok(%msgc,2,44),2,32) }
+    elseif ( $1 == ident ) { return $gettok($gettok(%msgc,5,44),2,32) }
+    elseif ( $1 == host ) { return $gettok($gettok(%msgc,6,44),2,32) }
+    elseif ( $1 == modes ) { return $gettok($gettok(%msgc,7,44),2,32) }
+    elseif ( $1 == ac ) { return $gettok($gettok(%msgc,8,44),2,32) }
+    elseif ( $1 == account ) { return $gettok($gettok(%msgc,8,44),2,32) }
+    elseif ( $1 == auth ) { return $gettok($gettok(%msgc,8,44),2,32) }
+    elseif ( $1 == base64ip ) { return $gettok($gettok(%msgc,9,44),2,32) }
+    elseif ( $1 == realname ) { return $gettok($gettok(%msgc,10,44),2-,32) }
+    else { return $null }
+  }
+}
+
 alias ms.get.server { 
   if ( $ms.db(read,s,$2) ) { 
     var %msgs $v1
@@ -416,12 +452,31 @@ alias ms.get.server {
   }
 }
 
+alias ms.db.reset {
+  ms.echo green Resetting databases
+  ms.db rem s
+  ms.db rem c
+  ms.db rem ch
+  ms.db rem l
+  ms.db rem config
+  if ( $hget(servers) ) { hfree servers | hmake -s servers 100 }
+  else { hmake -s servers 100 }
+  if ( $hget(clients) ) { hfree clients | hmake -s clients 10000 }
+  else { hmake -s clients 10000 }
+  if ( $hget(channels) ) { hfree channels | hmake -s channels 1000 }
+  else { hmake -s channels 1000 }
+  if ( $hget(list) ) { hfree list | hmake -s list 10000 }
+  else { hmake -s list 10000 }
+  if ( $hget(config) ) { hfree config | hmake -s config 100 }
+  else { hmake -s config 100 }
+}
+
 alias ms.db {
   ; $ms.db(read,s,arg1)
   ; /ms.db write ch arg1 arg2+
   ; /ms.db rem\del c [arg1]
 
-  ; TODO: add  $ms.db(search,TEXT) to search for a specific value in the database in arg1 section 
+  ; TODO: add  $ms.db(search,c,num,TEXT) to search for a specific value in the database in arg1 section 
 
   ; TODO: Remove .ini, numerics with [ interfere with the .ini file
   ; After testing move this variable to mServices_config.mrc and begin sql db testing ?
@@ -431,6 +486,7 @@ alias ms.db {
     elseif ( $2 == c ) { var %db.file ms.ial.ini | var %db.topic clients | var %db.hash clients }
     elseif ( $2 == ch ) { var %db.file ms.ial.ini | var %db.topic channels | var %db.hash channels }
     elseif ( $2 == l ) { var %db.file ms.ial.ini | var %db.topic list | var %db.hash list }
+    elseif ( $2 == config ) { var %db.file ms.ial.ini | var %db.topic config | var %db.hash config }
     else { var %db.file $+($2,.ini) | var %db.hash $2 }
 
     var %db.arg1 $3 ,%db.arg2 $4-
@@ -458,7 +514,8 @@ alias ms.db {
       else { remini %db.file %db.topic }
     }
     elseif ( $1 == search ) && ( %ms.db.type == hash ) {
-      if ( $hfind($2,$+($chr(42),$3,$chr(42)),1,w).data ) { return $v1 }
+      if ( $3 == num ) { return $hfind(%db.hash,$+($chr(42),$3,$chr(42)),1,w).item }
+      elseif ( $hfind($2,$+($chr(42),$3,$chr(42)),1,w).data ) { return $v1 }
       else { return $null }
     }
     else { ms.echo red DB error, missing read\write or rem\del: $1- }
@@ -487,6 +544,12 @@ alias ms.db {
     echo $+(Total list: %l)
     while (%l) { 
       echo -a %l $hget(list,%l).item $hget(list,%l).data
+      dec %l
+    }
+    var %l $hget(config,0).data
+    echo $+(Total config: %l)
+    while (%l) { 
+      echo -a %l $hget(config,%l).item $hget(config,%l).data
       dec %l
     }
   }

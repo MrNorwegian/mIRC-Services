@@ -6,10 +6,11 @@ on *:unload:{
   unload -rs scripts/mIRC-Services/mServices_botcommands.mrc
   ; Optional modules
   unload -rs scripts/mIRC-Services/mServices_funbots.mrc
+  unload -rs scripts/mIRC-Services/mServices_gamebot.mrc
   unload -rs scripts/mIRC-Services/mServices_spybot.mrc
 
   ; Undernet GNUWorld services
-  ; unload -rs scripts/mIRC-Services/mServices_cservice.mrc
+  unload -rs scripts/mIRC-Services/mServices_cservice.mrc
   ; unload -rs scripts/mIRC-Services/mServices_ccontrol.mrc
   ; unload -rs scripts/mIRC-Services/mServices_chanfix.mrc
 
@@ -29,10 +30,11 @@ on *:load:{
   load -rs scripts/mIRC-Services/mServices_botcommands.mrc
   ; Optional modules
   load -rs scripts/mIRC-Services/mServices_funbots.mrc
+  load -rs scripts/mIRC-Services/mServices_gamebot.mrc
   load -rs scripts/mIRC-Services/mServices_spybot.mrc
 
   ; Undernet GNUWorld services
-  ; load -rs scripts/mIRC-Services/mServices_cservice.mrc
+  load -rs scripts/mIRC-Services/mServices_cservice.mrc
   ; load -rs scripts/mIRC-Services/mServices_ccontrol.mrc
   ; load -rs scripts/mIRC-Services/mServices_chanfix.mrc
 
@@ -60,7 +62,7 @@ on *:sockopen:mServices:{
   ms.echo blue [mServices mIRC Server] Connecting to $mServices.config(serverName) ( %ms.numeric )
   mServices.raw PASS $+(:,$mServices.config(password))
   mServices.raw SERVER $mServices.config(serverName) 1 %ms.startime $ctime P10 $+(%ms.numeric,%ms.maxcon) $mServices.config(flags) $+(:,$mServices.config(info))
-
+  ms.newserver SERVER $mServices.config(serverName) 1 %ms.startime $ctime P10 $+(%ms.numeric,%ms.maxcon) $mServices.config(flags) $+(:,$mServices.config(info))
   ; Here burst the bots, chans and modes (remember that timestamp must be modified)
 
   ; Sending END_OF_BURST
@@ -170,9 +172,10 @@ on *:sockread:mServices:{
     return
   }
 
-  ; <server numeric> <AC|ACCOUNT>
+  ; <Server numeric> AC|ACCOUNT <client numeric> <account accountid>
   elseif ($istok(AC ACCOUNT,$2,32) == $true) {
     ; TODO, this is for account stuff
+    ms.account $1-
     return
   }
 
@@ -208,11 +211,13 @@ on *:sockread:mServices:{
     ms.client.part $1 $3
     return
   }
-  ; <client numeric> <M|MODE> <channel> <:+-modes> <client numerics> <timestamp>
+
+  ; BbAC6 M #testchan -v+tnklo IAAAA kode 123 BdAAA 1000000000
+  ; <client numeric> <M|MODE> <channel> <+-modes> <arg1 arg2 arg3 arg4 etc> <timestamp>
   ; <client numeric> <M|MODE> <client nick> <:+-modes> 
   elseif ($istok(M MODE,$2,32) == $true) {
     ; echo ascii for #
-    if ( $left($3,1) == 35 ) { ms.mode.channel $1 $3 $4 $5 }
+    if ( $left($3,1) == $chr(35) ) { ms.mode.channel $1 $3 $4 $5- }
     else { ms.mode.client $1 $3 $4 }
 
     return
@@ -226,6 +231,7 @@ on *:sockread:mServices:{
 
   ; <client numeric> <OM|OPMODE> <channel> <modes> <params\client numerics>
   elseif ($istok(OM OPMODE,$2,32) == $true) {
+    if ( $left($3,1) == $chr(35) ) { ms.mode.channel $1 $3 $4 $5- }
     ; TODO set modes, NOTE: this is for channels AND clients !, use same alias as mode above?
     return
   }
@@ -245,7 +251,7 @@ on *:sockread:mServices:{
 
   ; <client numeric> <P|Privmsg> <targetchan\targetclient numeric> :<message>
   elseif ($istok(P PRIVMSG,$2,32) == $true) {
-    ms.servicebot.privmsg $1 $3-
+    ms.servicebot.p10.privmsg $1 $3-
     return
   }
 

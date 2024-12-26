@@ -2,7 +2,6 @@
 * Use db of linked servers to find all servers doing a Squit 
 * Quit all users on squit servers (and part all it's channels)
 
-* Redo ms.load.* and ms.unload.* to be more dynamic
 - When J,L,P messages run it thru ms.servicebots.join\leave\privmsg to and loop thru %ms.servicebots.online  to see if any of the bots is interessed ?
 - For now i'm calling ms.spybot.report directly in mServices_command, but i want to run it thru some other thing, so if spybot scipt file is NOT loaded and ms.spybot.report doest not exist...
 
@@ -15,3 +14,8 @@
 
 * make some shortcuts for getting info 
 - ms.getmodes for a channel and user ?
+
+* If ircop whois funbots (and spybot\X etc???) show all channels
+
+* Continue migrate to ms.config.get instead of ms.fb.get ms.sp.get etc
+
