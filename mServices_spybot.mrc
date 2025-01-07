@@ -80,7 +80,7 @@ alias ms.stop.spybot {
 alias ms.spybot.report { 
   ; remember: %ms.status 
   ; %spr. == spybotreport * note to self *
-  if ( $istok(%ms.servicebots.online,%ms.sb.spybot.nick,44)) && ( $ms.sb.get(report,spybot) == true ) {
+  if ( $istok(%ms.servicebots.online,%ms.sb.spybot.nick,44)) && ( $ms.sb.get(report,spybot) == true ) && ( %ms.status == linked finished ) {
 
     ; S %ms.ns.num %ms.ns.name %ms.ns.hop %ms.ns.starttime %ms.ns.linktime %ms.ns.protocol %ms.ns.maxcon %ms.ns.flags %ms.ns.desc
     if ( $1 === S ) { 
@@ -91,7 +91,10 @@ alias ms.spybot.report {
     elseif ( $1 === N ) { 
       ; TODO, remove network.domain from spr.sn
       var %spr.sn $+($chr(91),$gettok($gettok($ms.db(read,s,$2),1,44),2,32),$chr(93)) 
-      ms.servicebot.say %ms.sb.spybot.numeric $ms.sb.get(chan,spybot) New user connected on %spr.sn -> $3 $+($chr(40),$6,@,$7,$chr(41)) $+($chr(91),$base64toip($10),$chr(93)) * $12-
+      var %spr.cn $3
+      var %spr.idhost $+($chr(40),$6,@,$7,$chr(41))
+      var %spr.base64ip $+($chr(91),$base64toip($10),$chr(93))
+      ms.servicebot.say %ms.sb.spybot.numeric $ms.sb.get(chan,spybot) User $ms.orange(%spr.cn %spr.idhost) %spr.base64ip * $12- Connected to $ms.yellow(%spr.sn)
       return
     }
 
@@ -127,13 +130,20 @@ alias ms.spybot.report {
       var %spr.cn $ms.get.client(nick,$2)
       var %spr.idhost $+($chr(40),$ms.get.client(ident,$2),@,$ms.get.client(host,$2),$chr(41))
       var %spr.base64ip $+($chr(91),$base64toip($ms.get.client(base64ip,$2)),$chr(93))
-      ms.servicebot.say %ms.sb.spybot.numeric $ms.sb.get(chan,spybot) User disconnected from %spr.sn -> %spr.cn %spr.idhost %spr.base64ip * $ms.get.client(realname,$2) With reason: $3-
+      ms.servicebot.say %ms.sb.spybot.numeric $ms.sb.get(chan,spybot) User $ms.orange(%spr.cn %spr.idhost) %spr.base64ip * $ms.get.client(realname,$2) Disconnected from $ms.yellow(%spr.sn) With reason: $3-
       return
     }
     ; K %ms.ck.num %ms.ck.chan %ms.ck.reason
+    ; <client numeric> <K|KICK> <channel> <target nicknumeric> :reason
+    ; K num chan kicked bynum reason
     elseif ( $1 === K ) { 
+      var %spr.kn $ms.get.client(nick,$2) $+($chr(40),$ms.get.client(ident,$2),@,$ms.get.client(host,$2),$chr(41))
+      var %spr.chan $3
+      var %spr.kby $ms.get.client(nick,$5) $+($chr(40),$ms.get.client(ident,$5),@,$ms.get.client(host,$5),$chr(41))
+      ms.servicebot.say %ms.sb.spybot.numeric $ms.sb.get(chan,spybot) User %spr.kn was kicked from %spr.chan by %spr.kby with reason: $6-
       return
     }
+
     ; M <client numeric> <channel> <+-modes> <arg1 arg2 arg3 arg4 etc> <timestamp>
     elseif ( $1 === M ) && ($5) {  
       var %spr.mnum $2

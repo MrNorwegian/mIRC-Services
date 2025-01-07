@@ -11,8 +11,10 @@ alias ms.start.servicebots {
   var %ms.start.sb $numtok($1,44)
   while ( %ms.start.sb ) { 
     ms.start. $+ $gettok($1,%ms.start.sb,44)
+    set %ms.status linked starting $gettok($1,%ms.start.sb,44)
     dec %ms.start.sb
   }
+  set %ms.status linked finished
 }
 
 ; /ms.stop.servicebots cservice,spybot,funbots
@@ -62,10 +64,15 @@ alias ms.servicebot.remchan {
   }
 }
 
+; ms.servicebot.say <numeric> <target> <message>
+; For some reason, the mirc craches when using mServices.raw here
+; mServices.raw $1 P $2 : $+ $3-
 alias ms.servicebot.say {
-  if ( $3 ) {
-    sockwrite -nt mServices $1 P $2 : $+ $3-
-  }
+  if ( $3 ) { sockwrite -nt mServices $1 P $2 : $+ $3- }
+}
+
+alias ms.servicebot.notice {
+  if ( $3 ) { sockwrite -nt mServices $1 NOTICE $2 : $+ $3- }
 }
 
 alias ms.servicebot.join { 
@@ -97,7 +104,10 @@ alias ms.servicebot.invited {
 
 ; client numeric> <channel> <target numeric>
 alias ms.servicebot.kicked {
-  if ( %mServices.loaded.funbots ) { ms.funbots.kicked $1- }
+  ; Need to another way to check if kicked bot is a funbot,gamebot or servicebot like spybot,x,euworld what cannot be kicked but was
+  if ( %mServices.loaded.funbots ) { 
+    if ( $istok(%ms.servicebots.online,$ms.get.client(nick,$3),44) ) { ms.funbots.kicked $1- }
+  }
 }
 
 ; <client numeric> <target srvnum> <target nick>
@@ -157,7 +167,12 @@ alias ms.servicebot.p10.chanmode {
 
 ; <client numeric> <targetchan\targetclient numeric> :<message>
 alias ms.servicebot.p10.privmsg { 
-  if ( %mServices.loaded.funbots == true ) { ms.funbots.privmsg $1- }
-  if ( %mServices.loaded.spybot == true ) { ms.spybot.privmsg $1- } 
-  if ( %mServices.loaded.cservice == true ) { ms.cservice.privmsg $1- }
+  if ( $3 == $+(:,$chr(1),VERSION,$chr(1)) ) { ms.servicebot.notice $2 $1 $+($chr(1),VERSION,$chr(1)) msl-Services alpha v0.00000001 by naka }
+  if ( $3 == $+(:,$chr(1),PING) ) { ms.servicebot.notice $2 $1 $+($chr(1),PING $4,$chr(1)) }
+  else {
+    if ( %mServices.loaded.funbots == true ) { ms.funbots.privmsg $1- }
+    if ( %mServices.loaded.gamebot == true ) { ms.gamebot.privmsg $1- }
+    if ( %mServices.loaded.spybot == true ) { ms.spybot.privmsg $1- } 
+    if ( %mServices.loaded.cservice == true ) { ms.cservice.privmsg $1- }
+  }
 }

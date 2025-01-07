@@ -2,12 +2,22 @@ on *:load: { ms.echo green Loaded mServices_commands.mrc }
 on *:unload: { ms.echo red Unloaded mServices_commands.mrc }
 
 alias mServices.raw {
-  if ($sock(mServices) != $null) { sockwrite -nt mServices $1- | ms.echo orange [Sockwrite Client] <-- $1- }
+  if ($sock(mServices) != $null) { 
+    sockwrite -nt mServices $1-
+    if ( $mServices.config(rawdebug) == true ) { 
+      ms.debug orange [Sockwrite Client] --> $1-
+    }
+  }
   else { ms.echo red [Sockwrite Client] <-- Server is not running | return }
 }
 alias mServices.sraw {
-  if ($sock(mServices) != $null) { sockwrite -nt mServices $inttobase64($mServices.config(numeric),2) $1- | ms.echo orange [Sockwrite Server] <-- $inttobase64($mServices.config(numeric),2) $1- }
-  else { ms.echo red [Sockwrite Server] <-- Server is not running | return }
+  if ($sock(mServices) != $null) { 
+    sockwrite -nt mServices $inttobase64($mServices.config(numeric),2) $1-
+    if ( $mServices.config(rawdebug) == true ) { 
+      ms.debug orange [Sockwrite Server] <-- $inttobase64($mServices.config(numeric),2) $1-
+    }
+  }
+  else { ms.debug red [Sockwrite Server] <-- Server is not running | return }
 }
 
 alias mServices.start {
@@ -17,12 +27,19 @@ alias mServices.start {
   ms.echo green [mServices IRC Server] Starting server
   ms.echo green Using servername: $mServices.config(serverName) and linking to hostname: $mServices.config(hostname) port: $mServices.config(port) with ctime: $ctime
 }
+
 alias mServices.stop {
   if ($sock(mServices) == $null) { ms.echo orange Server is not running | return }
-  ms.echo green[mServices mIRC Server] Stopping the server
+  ms.echo green [mServices mIRC Server] Stopping the server
   ms.stop.servicebots $mServices.config(servicebots)
   mServices.sraw SQ %mServices.serverName now :Server shutdown
   sockclose $sock(mServices) 
+}
+
+; Not that debug, this is echo debug in console and #debug channel if spybot is enabled
+alias ms.debug { 
+  if ( $mServices.config(rawdebug) == true ) { ms.echo $1 $2- }
+  if ( %mServices.loaded.spybot ) { ms.spybot.debug $2- }
 }
 alias ms.echo { 
   var %ms.echo.name <mServices> 
@@ -36,6 +53,30 @@ alias ms.echo {
   if ($window($mServices.config(window)) != $null) { echo %echo.color -t $mServices.config(window) %ms.echo.name $2- }
   else { echo %echo.color -at %ms.echo.name $2- }
 }
+
+; TODO, redo game.* to ms.* in mServices_gb.*, use alias to add ( ) ? example under:
+;alias ms.greenp { return $+($chr(40),00,03,$1,00,03,$chr(41)) ;}
+alias game.green { return 00,03 }
+alias game.red { return 00,04 }
+alias game.blue { return 00,02 }
+
+alias ms.white { return 00 $+ $1- $+  }
+alias ms.black { return 01 $+ $1- $+  }
+alias ms.blue { return 02 $+ $1- $+  }
+alias ms.green { return 03 $+ $1- $+  }
+alias ms.red { return 04 $+ $1- $+  }
+alias ms.darkred { return 05 $+ $1- $+  }
+alias ms.purple { return 06 $+ $1- $+  }
+alias ms.orange { return 07 $+ $1- $+  }
+alias ms.yellow { return 08 $+ $1- $+  }
+alias ms.lightgreen { return 09 $+ $1- $+  }
+alias ms.cyan { return 10 $+ $1- $+  }
+alias ms.lightblue { return 11 $+ $1- $+  }
+alias ms.blue { return 12 $+ $1- $+  }
+alias ms.pink { return 13 $+ $1- $+  }
+alias ms.grey { return 14 $+ $1- $+  }
+alias ms.lightgrey { return 15 $+ $1- $+  }
+
 
 ; <server numeric> <N|NICK> <nick> <hop count> <timestamp> <user> <host> [<modes> [auth if +r]] <base64 ip> <clientnumeric> :<real name>
 ; <nick numeric> <N|NICK> <newnick> <timestamp> ; nick change
@@ -155,6 +196,12 @@ alias ms.newserver {
   return
 }
 
+alias ms.remserver {
+  var %ms.rs.num $1
+  ms.db rem s %ms.rs.num
+  ms.db rem l servers %ms.rs.num
+  return
+}
 ; On burst on this server
 ; <Server numeric> B <chan> <createtime> [+chanmodes> [limit] [key]] AzAAE,BbACg,AoAAH:v,ABAAx:o,AzAAC,BdAAA,BWAAA:vo,AzAAA :%latest!*@* olderban!*@*
 
@@ -302,7 +349,7 @@ alias ms.client.part {
     else { ms.db write l %ms.cl.num $remtok($ms.db(read,l,%ms.cl.num),%ch,44) }
     ms.db write l channels $remtok($ms.db(read,l,channels),%ch,44)
     ms.echo blue [IAL DB] Client %ms.cl.num parted channel %ch
-    ms.servicebot.p10.chparted $1 %ch $iif($3,$3,$null)
+    ms.servicebot.p10.chparted $1 %ch $iif($3,$3,$null) $4 $5-
     dec %c
   }
   return
@@ -452,6 +499,14 @@ alias ms.get.server {
   }
 }
 
+alias ms.ison.chan {
+  if ( $2 ) { 
+    if ( $ms.get.client(numeric,$1) ) { var %ms.isonchan.num $v1 }
+    else { var %ms.isonchan.num $1 }
+    if ( $istok($ms.db(read,l,%ms.isonchan.num),$2,44) ) { return true }
+    else { return false }
+  }
+}
 alias ms.db.reset {
   ms.echo green Resetting databases
   ms.db rem s

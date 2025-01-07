@@ -125,10 +125,15 @@ alias ms.funbots.invited {
 ; <client numeric> <channel> <target numeric> 
 alias ms.funbots.kicked {
   var %ms.sb.nick %ms.fb. [ $+ [ $3 ] ]
-  echo -s DEBUG: %ms.sb.nick num $3 chans: $ms.config.get(channels,%ms.sb.nick)
   if ($istok($ms.config.get(load,funbots),%ms.sb.nick,44)) {
     if ( $istok($ms.config.get(channels,%ms.sb.nick),$2,44) ) { ms.servicebot.remchan %ms.sb.nick $2 }
   }
 }
 
-alias ms.funbots.privmsg { return }
+alias ms.funbots.privmsg { 
+  ms.fb.fishbot.privmsg $1- 
+  ms.fb.banana.privmsg $1-
+  ms.fb.catbot.privmsg $1-
+  ms.fb.snailbot.privmsg $1-
+  return 
+}

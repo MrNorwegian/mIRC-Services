@@ -23,6 +23,7 @@ on *:unload:{
   ; TODO remove db files if any
   ms.echo green Finished unloaded modules
 }
+
 on *:load:{ 
   load -rs scripts/mIRC-Services/mServices_conf.mrc
   load -rs scripts/mIRC-Services/mServices_base64.mrc
@@ -48,6 +49,7 @@ on *:load:{
 }
 
 on *:sockclose:mServices:{ ms.echo orange [Sockclose] $sockname closed }
+
 on *:sockopen:mServices:{
   if ($sockerr > 0) {
     ms.echo orange [Sockopen] Failed to open $sockname ( $sockerr )
@@ -69,12 +71,13 @@ on *:sockopen:mServices:{
   mServices.sraw EB
   ms.echo blue [mServices mIRC Server] Sendt end of burst, waiting for response
 }
+
 on *:sockread:mServices:{
   var %mServices.sockRead = $null
   sockread %mServices.sockRead
   tokenize 32 %mServices.sockRead
 
-  if ( $mServices.config(rawdebug) == true ) { ms.echo orange [Sockread Server] --> $1- | ms.spybot.debug $1- }
+  ms.debug orange [Sockread Server] --> $1-
 
   if ($sockerr > 0) {
     ms.echo red [Sockread] : $sockname closed due to error ( $sockerr )
@@ -99,8 +102,8 @@ on *:sockread:mServices:{
   if ($istok(EA,$2,32) == $true) && ( %ms.myhub == $1 ) {
     ms.echo blue [mServices mIRC Server] Received Acknowledge the end of burst
     ms.echo blue [mServices mIRC Server] Starting to load services
+    set %ms.status linked loading servicebots
     ms.start.servicebots $mServices.config(servicebots)
-    set %ms.status linked
     return
   }
 
@@ -131,10 +134,12 @@ on *:sockread:mServices:{
     set %ms.status bursting
     return
   }
+
   elseif ($istok(S,$2,32) == $true) {
     ms.newserver $1-
     return
   }
+
   ; <numeric> <SQ|SQUIT> <server name> <time> :<reason>
   elseif ($istok(SQ SQUIT,$2,32) == $true) {
     ; TODO remove clients connected to the server sending SQ, also all leaf servers for that server, sooo good luck with that
@@ -143,29 +148,47 @@ on *:sockread:mServices:{
     if ( $1 == %ms.numeric ) { ms.echo green [mServices mIRC Server] Stopped server }
     ; Some server sq, try find out who
     else { 
-      set %ms.sq.server $3 | set %ms.sq.num 0 | set %ms.sq.servers $ms.db(read,l,servers)
-      unset %ms.sq.alive 
+      set %ms.sq.server $3
+      set %ms.sq.num 0
+      set %ms.sq.servers $ms.db(read,l,servers)
       mServices.sraw LI
+      ms.debug red [SQuit detected] - $2 
     }
     return
   }
 
   ; <numeric> <raw numeric> <my numeric> <leaf name> <hub name> :<Desc>
-  if (%ms.sq.servers) && ( $istok(364 365,$2,32) ) {
+  if ($3 == IA ) && (%ms.sq.servers) {
+    ; 
     if ( $2 == 364 ) { 
-      ;$ms.db(search,servers,name SERVER.NAME)
-      if ( $4 == %mServices.serverName ) { return }
-      set %ms.sq.alive $addtok(%ms.sq.alive,$ms.db(search,servers,name $4),32)
-      set %ms.sq.servers $remtok(%ms.sq.servers,$ms.db(search,servers,name $4),32)
+      set %ms.sq.alive $addtok(%ms.sq.alive,$ms.db(search,servers,name $4),44)
+      set %ms.sq.servers $remtok(%ms.sq.servers,$ms.db(search,servers,name $4),44)
       inc %ms.sq.num
     }
     ; End of LA 
     elseif ( $2 == 365 ) { 
-      if ( $numtok($ms.db(read,l,servers),32) <= %ms.sq.num ) { echo -a ALL SERVERS ARE ALIVE $numtok($ms.db(read,l,servers),32) <= %ms.sq.num }
-      else { 
-        echo -a NOT ALL SERVERS ARE ALIVE $numtok($ms.db(read,l,servers),32) <= %ms.sq.num
-        echo Alive: %ms.sq.alive - DB: $ms.db(read,l,servers)
-        echo Dead: %ms.sq.servers 
+      if ( $numtok(%ms.sq.servers,44) >= 1 ) {
+        ms.echo red <mServices> Missing some servers - Expected: $ms.db(read,l,servers)
+        ms.echo red <mServices> Alive: %ms.sq.alive
+        ms.echo red <mServices> Dead: %ms.sq.servers 
+        ms.debug red [SQuit detected] - Missing servers: %ms.sq.servers
+
+        ; Loop thru all missing servers and remove all clients connected to the server
+        var %ms.sq.i $numtok(%ms.sq.servers,44)
+        while ( %ms.sq.i ) {
+          ms.debug red [SQuit detected] Removing server: $gettok(%ms.sq.servers,%ms.sq.i,44)
+          var %ms.sq.clients $ms.db(read,l,$gettok(%ms.sq.servers,%ms.sq.i,44))
+          
+          var %ms.sq.c $numtok(%ms.sq.clients,44)
+          while ( %ms.sq.c ) {
+            ms.debug red [SQuit detected] Removing client: $gettok(%ms.sq.clients,%ms.sq.c,44)
+            ms.client.quit $gettok(%ms.sq.clients,%ms.sq.c,44) *.net *.split
+            dec %ms.sq.c
+          }
+          ms.remserver $gettok(%ms.sq.servers,%ms.sq.i,44)
+          dec %ms.sq.i
+        }
+
       }
       unset %ms.sq.alive %ms.sq.servers %ms.sq.server %ms.sq.num 
     }
@@ -245,7 +268,7 @@ on *:sockread:mServices:{
   ; <client numeric> <K|KICK> <channel> <target nicknumeric> :reason
   elseif ($istok(K KICK,$2,32) == $true) {
     ms.servicebot.kicked $1 $3 $4
-    ms.client.part $4 $3 kicked $1 $5
+    ms.client.part $4 $3 kicked $1 $5-
     return
   }
 
@@ -280,6 +303,7 @@ on *:sockread:mServices:{
     mServices.sraw Z $3-
     return
   }
+
   elseif ($istok(RI RPING,$2,32) == $true) {
     ; mServices.sraw RO $3-
     return
@@ -307,6 +331,7 @@ on *:sockread:mServices:{
     mServices.sraw 391 $1 $mServices.config(serverName) $ctime 0 $+(:,$asctime($ctime,dddd mmmm dd yyyy -- HH:nn) +02:00)
     return
   }
+
   else {
     ms.echo red [Sockread] Unknown command received: $1-
     return

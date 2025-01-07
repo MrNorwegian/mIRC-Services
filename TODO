@@ -19,3 +19,9 @@
 
 * Continue migrate to ms.config.get instead of ms.fb.get ms.sp.get etc
 
+* When funbots is on it's last channel and get kicked the db cannot be updated
+- [22:32:05] * /writeini: insufficient parameters (line 60, mServices_botcommands.mrc)
+
+* On B (burst of channels), check timestamp because reconnected server after netsplit overrides channels 
+- * You were kicked by *.deepnet.chat (Net Rider)
+- If +ik kick clients that doesnt belong there
