@@ -61,15 +61,14 @@ on *:sockopen:mServices:{
   set %ms.startime $ctime
   set %ms.status linking
 
-  ms.echo blue [mServices mIRC Server] Connecting to $mServices.config(serverName) ( %ms.numeric )
+  ; sending PASS, SERVER and burst
+  ms.echo blue [mServices mIRC Server] Connection established to $+($mServices.config(hostname),$mServices.config(port))
+  ms.echo blue [mServices mIRC Server] Sending PASS and SERVER
   mServices.raw PASS $+(:,$mServices.config(password))
   mServices.raw SERVER $mServices.config(serverName) 1 %ms.startime $ctime P10 $+(%ms.numeric,%ms.maxcon) $mServices.config(flags) $+(:,$mServices.config(info))
   ms.newserver SERVER $mServices.config(serverName) 1 %ms.startime $ctime P10 $+(%ms.numeric,%ms.maxcon) $mServices.config(flags) $+(:,$mServices.config(info))
-  ; Here burst the bots, chans and modes (remember that timestamp must be modified)
-
-  ; Sending END_OF_BURST
-  mServices.sraw EB
-  ms.echo blue [mServices mIRC Server] Sendt end of burst, waiting for response
+  
+  ms.echo blue [mServices mIRC Server] Connected to server, waitin for burst and end of burst
 }
 
 on *:sockread:mServices:{
@@ -77,6 +76,7 @@ on *:sockread:mServices:{
   sockread %mServices.sockRead
   tokenize 32 %mServices.sockRead
 
+  ; Just for debugging in console or #debug channel
   ms.debug orange [Sockread Server] --> $1-
 
   if ($sockerr > 0) {
@@ -86,37 +86,13 @@ on *:sockread:mServices:{
     halt
   }
 
-  ; Sending Acknowledge the end of burst
-  if ($istok(EB EOB_ACK,$2,32) == $true) && ( %ms.myhub == $1 ) {
-    mServices.sraw EA
-    ms.echo blue [mServices mIRC Server] Received response with EB and sending EA
-    set %ms.status burst finished
-    return
-  }
-  elseif ($istok(EB EOB_ACK,$2,32) == $true) && ( $1 != %ms.myhub) {
-    ; new server connected to another server on the network, do something ??? nah?
-    return
-  }
-
-  ; Received Acknowledge the end of burst
-  if ($istok(EA,$2,32) == $true) && ( %ms.myhub == $1 ) {
-    ms.echo blue [mServices mIRC Server] Received Acknowledge the end of burst
-    ms.echo blue [mServices mIRC Server] Starting to load services
-    set %ms.status linked loading servicebots
-    ms.start.servicebots $mServices.config(servicebots)
-    return
-  }
-
-  elseif ($istok(EA,$2,32) == $true) && ( $1 != %ms.myhub) {
-    ; new server connected to another server on the network, do something ??? nah?
-    return
-  }
-
+  ; checking if password is correct, then checking servername
   ; <PASS> :<password>
   if ($istok(PASS,$1,32) == $true) { 
+    set %ms.status checking password
     if ( $mid($2,2,99) == $mServices.config(password) ) { 
       ms.echo blue [mServices mIRC Server] Received response with PASS
-      set %ms.status identifying pass
+      set %ms.status verified password
       return
     }
     else { 
@@ -129,9 +105,11 @@ on *:sockread:mServices:{
   ; <server numeric> <S|SERVER> <server name> <hop count> <start time> <link time> <protocol> <server numeric(2)+maxconn(3)> [+flags] :<description>
   elseif ($istok(SERVER,$1,32) == $true) {
     ; TODO: check if server name is correct and server numeric doesnt crash with us
+    ; set %ms.status checking password
+    ; set %ms.status verified password
     ms.echo blue [mServices mIRC Server] Received response with SERVER
     ms.newserver $1-
-    set %ms.status bursting
+    set %ms.status Bursting
     return
   }
 
@@ -140,62 +118,43 @@ on *:sockread:mServices:{
     return
   }
 
-  ; <numeric> <SQ|SQUIT> <server name> <time> :<reason>
-  elseif ($istok(SQ SQUIT,$2,32) == $true) {
-    ; TODO remove clients connected to the server sending SQ, also all leaf servers for that server, sooo good luck with that
-    ; Read SQuit, this might be a little related (use ms.client.quit or something)
+  ; Sending Acknowledge the end of burst
+  if ($istok(EB EOB_ACK,$2,32) == $true) && ( %ms.myhubnum == $1 ) {
+    ; Burst the bots, chans and modes
+    ms.echo blue [mServices mIRC Server] Received end of burst, bursting servicebots and channels
+  
+    ; Burst here
 
-    if ( $1 == %ms.numeric ) { ms.echo green [mServices mIRC Server] Stopped server }
-    ; Some server sq, try find out who
-    else { 
-      set %ms.sq.server $3
-      set %ms.sq.num 0
-      set %ms.sq.servers $ms.db(read,l,servers)
-      mServices.sraw LI
-      ms.debug red [SQuit detected] - $2 
-    }
+    ; Sending END_OF_BURST
+    ms.echo blue [mServices mIRC Server] Sending Acknowledge
+    mServices.sraw EB
+    mServices.sraw EA
+    set %ms.status Burst finished
+    return
+  }
+  elseif ($istok(EB EOB_ACK,$2,32) == $true) && ( $1 != %ms.myhubnum ) {
+    ; new server connected to another server on the network, do something ??? nah?
     return
   }
 
-  ; <numeric> <raw numeric> <my numeric> <leaf name> <hub name> :<Desc>
-  if ($3 == IA ) && (%ms.sq.servers) {
-    ; 
-    if ( $2 == 364 ) { 
-      set %ms.sq.alive $addtok(%ms.sq.alive,$ms.db(search,servers,name $4),44)
-      set %ms.sq.servers $remtok(%ms.sq.servers,$ms.db(search,servers,name $4),44)
-      inc %ms.sq.num
-    }
-    ; End of LA 
-    elseif ( $2 == 365 ) { 
-      if ( $numtok(%ms.sq.servers,44) >= 1 ) {
-        ms.echo red <mServices> Missing some servers - Expected: $ms.db(read,l,servers)
-        ms.echo red <mServices> Alive: %ms.sq.alive
-        ms.echo red <mServices> Dead: %ms.sq.servers 
-        ms.debug red [SQuit detected] - Missing servers: %ms.sq.servers
+  ; Received Acknowledge the end of burst
+  if ($istok(EA,$2,32) == $true) && ( %ms.myhubnum == $1 ) {
+    ms.echo blue [mServices mIRC Server] Received Acknowledge of end of burst
+    ms.echo blue [mServices mIRC Server] Starting to load services
+    set %ms.status linked loading servicebots
 
-        ; Loop thru all missing servers and remove all clients connected to the server
-        var %ms.sq.i $numtok(%ms.sq.servers,44)
-        while ( %ms.sq.i ) {
-          ms.debug red [SQuit detected] Removing server: $gettok(%ms.sq.servers,%ms.sq.i,44)
-          var %ms.sq.clients $ms.db(read,l,$gettok(%ms.sq.servers,%ms.sq.i,44))
-          
-          var %ms.sq.c $numtok(%ms.sq.clients,44)
-          while ( %ms.sq.c ) {
-            ms.debug red [SQuit detected] Removing client: $gettok(%ms.sq.clients,%ms.sq.c,44)
-            ms.client.quit $gettok(%ms.sq.clients,%ms.sq.c,44) *.net *.split
-            dec %ms.sq.c
-          }
-          ms.remserver $gettok(%ms.sq.servers,%ms.sq.i,44)
-          dec %ms.sq.i
-        }
-
-      }
-      unset %ms.sq.alive %ms.sq.servers %ms.sq.server %ms.sq.num 
-    }
+    ; TODO, if bursting the service bots, skip this
+    ms.start.servicebots $mServices.config(servicebots)
     return
   }
 
-  ; <Server numeric> AC|ACCOUNT <client numeric> <account accountid>
+  elseif ($istok(EA,$2,32) == $true) && ( $1 != %ms.myhubnum) {
+    ; new server connected to another server on the network, do something ??? nah?
+    ; Yes, read todo
+    return
+  }
+
+  ; <Server numeric> AC|ACCOUNT <client numeric> <account accountid>|
   elseif ($istok(AC ACCOUNT,$2,32) == $true) {
     ; TODO, this is for account stuff
     ms.account $1-
@@ -312,6 +271,61 @@ on *:sockread:mServices:{
   ; <numeric> MO[TD] <server numeric>
   elseif ($istok(MO MOTD,$2,32) == $true) {
     mServices.sraw 422 $1 :MOTD File is missing
+    return
+  }
+
+  ; <numeric> <SQ|SQUIT> <server name> <time> :<reason>
+  elseif ($istok(SQ SQUIT,$2,32) == $true) {
+    ; TODO remove clients connected to the server sending SQ, also all leaf servers for that server, sooo good luck with that
+    ; Read SQuit, this might be a little related (use ms.client.quit or something)
+
+    if ( $1 == %ms.numeric ) { ms.echo green [mServices mIRC Server] Stopped server }
+    ; Some server sq, try find out who
+    else { 
+      set %ms.sq.server $3
+      set %ms.sq.num 0
+      set %ms.sq.servers $ms.db(read,l,servers)
+      mServices.sraw LI
+      ms.debug red [SQuit detected] - $2 
+    }
+    return
+  }
+
+  ; <numeric> <raw numeric> <my numeric> <leaf name> <hub name> :<Desc>
+  if ($3 == IA ) && (%ms.sq.servers) {
+    ; 
+    if ( $2 == 364 ) { 
+      set %ms.sq.alive $addtok(%ms.sq.alive,$ms.db(search,servers,name $4),44)
+      set %ms.sq.servers $remtok(%ms.sq.servers,$ms.db(search,servers,name $4),44)
+      inc %ms.sq.num
+    }
+    ; End of LA 
+    elseif ( $2 == 365 ) { 
+      if ( $numtok(%ms.sq.servers,44) >= 1 ) {
+        ms.echo red <mServices> Missing some servers - Expected: $ms.db(read,l,servers)
+        ms.echo red <mServices> Alive: %ms.sq.alive
+        ms.echo red <mServices> Dead: %ms.sq.servers 
+        ms.debug red [SQuit detected] - Missing servers: %ms.sq.servers
+
+        ; Loop thru all missing servers and remove all clients connected to the server
+        var %ms.sq.i $numtok(%ms.sq.servers,44)
+        while ( %ms.sq.i ) {
+          ms.debug red [SQuit detected] Removing server: $gettok(%ms.sq.servers,%ms.sq.i,44)
+          var %ms.sq.clients $ms.db(read,l,$gettok(%ms.sq.servers,%ms.sq.i,44))
+
+          var %ms.sq.c $numtok(%ms.sq.clients,44)
+          while ( %ms.sq.c ) {
+            ms.debug red [SQuit detected] Removing client: $gettok(%ms.sq.clients,%ms.sq.c,44)
+            ms.client.quit $gettok(%ms.sq.clients,%ms.sq.c,44) *.net *.split
+            dec %ms.sq.c
+          }
+          ms.remserver $gettok(%ms.sq.servers,%ms.sq.i,44)
+          dec %ms.sq.i
+        }
+
+      }
+      unset %ms.sq.alive %ms.sq.servers %ms.sq.server %ms.sq.num 
+    }
     return
   }
 

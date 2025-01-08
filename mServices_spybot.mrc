@@ -177,11 +177,14 @@ alias ms.spybot.report {
   }
 }
 
+; Spybot debug channel reporting
 alias ms.spybot.debug { 
-  if ( $ms.sb.get(report,spybot) == true ) { 
+  if ( $ms.sb.get(report,spybot) == true ) && ( %ms.status == linked finished ) { 
     ms.servicebot.say %ms.sb.spybot.numeric $ms.sb.get(debugchan,spybot) $1-
   }
 }
+
+; Spybot privmsg and channel commands
 alias ms.spybot.privmsg { 
   return
 }

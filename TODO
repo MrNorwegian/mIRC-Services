@@ -1,7 +1,3 @@
-* Make a db of linked servers in S messages
-* Use db of linked servers to find all servers doing a Squit 
-* Quit all users on squit servers (and part all it's channels)
-
 - When J,L,P messages run it thru ms.servicebots.join\leave\privmsg to and loop thru %ms.servicebots.online  to see if any of the bots is interessed ?
 - For now i'm calling ms.spybot.report directly in mServices_command, but i want to run it thru some other thing, so if spybot scipt file is NOT loaded and ms.spybot.report doest not exist...
 
@@ -22,6 +18,16 @@
 * When funbots is on it's last channel and get kicked the db cannot be updated
 - [22:32:05] * /writeini: insufficient parameters (line 60, mServices_botcommands.mrc)
 
-* On B (burst of channels), check timestamp because reconnected server after netsplit overrides channels 
-- * You were kicked by *.deepnet.chat (Net Rider)
+* Burst servicebots 
+- On B (burst of channels), use timestamp from uplink
+
+* You were kicked by *.deepnet.chat (Net Rider)
 - If +ik kick clients that doesnt belong there
+
+* Spybot during server burst
+- After %ms.status linked finished, if a new server connects set some variable with server num
+- Bb S London.UK.EU.deepnet.chat 4 0 1736345310 J10 BcAP] +6 :Some place in UK 
+- this case Bc not Bb
+- if Bc N do not report or change report text in #spychan and #debug
+- After Bc EA burst of new server is finished 
+

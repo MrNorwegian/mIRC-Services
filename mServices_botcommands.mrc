@@ -168,7 +168,7 @@ alias ms.servicebot.p10.chanmode {
 ; <client numeric> <targetchan\targetclient numeric> :<message>
 alias ms.servicebot.p10.privmsg { 
   if ( $3 == $+(:,$chr(1),VERSION,$chr(1)) ) { ms.servicebot.notice $2 $1 $+($chr(1),VERSION,$chr(1)) msl-Services alpha v0.00000001 by naka }
-  if ( $3 == $+(:,$chr(1),PING) ) { ms.servicebot.notice $2 $1 $+($chr(1),PING $4,$chr(1)) }
+  elseif ( $3 == $+(:,$chr(1),PING) ) { ms.servicebot.notice $2 $1 $+($chr(1),PING $4,$chr(1)) }
   else {
     if ( %mServices.loaded.funbots == true ) { ms.funbots.privmsg $1- }
     if ( %mServices.loaded.gamebot == true ) { ms.gamebot.privmsg $1- }

@@ -5,7 +5,7 @@ alias mServices.raw {
   if ($sock(mServices) != $null) { 
     sockwrite -nt mServices $1-
     if ( $mServices.config(rawdebug) == true ) { 
-      ms.debug orange [Sockwrite Client] --> $1-
+      ms.debug orange [Sockwrite Client] <-- $1-
     }
   }
   else { ms.echo red [Sockwrite Client] <-- Server is not running | return }
@@ -23,6 +23,8 @@ alias mServices.sraw {
 alias mServices.start {
   if ( $mServices.config(configured) == NO ) { ms.echo red Server is not configured. Please check mServices.* variables before starting the server. ( Alt + R ) | halt }
   if ($sock(mServices) != $null) { ms.echo orange Server is already running | return }
+  
+  ; First stage, open a connection to the server
   sockopen mServices $mServices.config(hostname) $mServices.config(port)
   ms.echo green [mServices IRC Server] Starting server
   ms.echo green Using servername: $mServices.config(serverName) and linking to hostname: $mServices.config(hostname) port: $mServices.config(port) with ctime: $ctime
@@ -197,10 +199,8 @@ alias ms.newserver {
 }
 
 alias ms.remserver {
-  var %ms.rs.num $1
-  ms.db rem s %ms.rs.num
-  ms.db rem l servers %ms.rs.num
-  return
+  if ($ms.db(read,s,$1)) { ms.db rem s $1 }
+  if ($istok($ms.db(read,l,servers),$1,44)) { ms.db write l servers $remtok($ms.db(read,l,servers),$1,44) }
 }
 ; On burst on this server
 ; <Server numeric> B <chan> <createtime> [+chanmodes> [limit] [key]] AzAAE,BbACg,AoAAH:v,ABAAx:o,AzAAC,BdAAA,BWAAA:vo,AzAAA :%latest!*@* olderban!*@*

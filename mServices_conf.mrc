@@ -94,7 +94,7 @@ alias ms.config.get {
 ; For resetting the configuration.
 alias ms.mServices.makeconfig  {
   ; Our services configuration.
-  writeini -n %mServices.config main numeric 0
+  writeini -n %mServices.config main numeric 512
   writeini -n %mServices.config main maxcon 512
   writeini -n %mServices.config main serverName changeme.localhost
   writeini -n %mServices.config main info A mIRC Services server
