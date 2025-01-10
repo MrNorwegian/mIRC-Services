@@ -31,3 +31,10 @@
 - if Bc N do not report or change report text in #spychan and #debug
 - After Bc EA burst of new server is finished 
 
+
+
+
+* Spybot
+!who (nick)
+!who (chan)
+!whowas (part of !nickhistory)

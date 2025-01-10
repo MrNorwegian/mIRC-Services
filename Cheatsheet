@@ -1,0 +1,7 @@
+
+$ms.get.client(numeric\nick\ident\host,numeric\nick) can also be realanme,account,ac,auth,etc
+$ms.get.server(numeric\name\hop\starttime\linktime\maxcon\flags\desc,numeric\name)
+$ms.get.channel(createtime\chanmodes\chanlimit\chankey\bans,#channel)
+
+
+

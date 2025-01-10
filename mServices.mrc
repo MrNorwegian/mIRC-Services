@@ -67,7 +67,7 @@ on *:sockopen:mServices:{
   mServices.raw PASS $+(:,$mServices.config(password))
   mServices.raw SERVER $mServices.config(serverName) 1 %ms.startime $ctime P10 $+(%ms.numeric,%ms.maxcon) $mServices.config(flags) $+(:,$mServices.config(info))
   ms.newserver SERVER $mServices.config(serverName) 1 %ms.startime $ctime P10 $+(%ms.numeric,%ms.maxcon) $mServices.config(flags) $+(:,$mServices.config(info))
-  
+
   ms.echo blue [mServices mIRC Server] Connected to server, waitin for burst and end of burst
 }
 
@@ -122,7 +122,7 @@ on *:sockread:mServices:{
   if ($istok(EB EOB_ACK,$2,32) == $true) && ( %ms.myhubnum == $1 ) {
     ; Burst the bots, chans and modes
     ms.echo blue [mServices mIRC Server] Received end of burst, bursting servicebots and channels
-  
+
     ; Burst here
 
     ; Sending END_OF_BURST
@@ -302,9 +302,9 @@ on *:sockread:mServices:{
     ; End of LA 
     elseif ( $2 == 365 ) { 
       if ( $numtok(%ms.sq.servers,44) >= 1 ) {
-        ms.echo red <mServices> Missing some servers - Expected: $ms.db(read,l,servers)
-        ms.echo red <mServices> Alive: %ms.sq.alive
-        ms.echo red <mServices> Dead: %ms.sq.servers 
+        ms.echo red [SQuit detected] Missing some servers - Expected: $ms.db(read,l,servers)
+        ms.echo red [SQuit detected] Alive: %ms.sq.alive
+        ms.echo red [SQuit detected] Dead: %ms.sq.servers 
         ms.debug red [SQuit detected] - Missing servers: %ms.sq.servers
 
         ; Loop thru all missing servers and remove all clients connected to the server

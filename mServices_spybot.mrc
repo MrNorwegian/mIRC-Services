@@ -98,6 +98,13 @@ alias ms.spybot.report {
       return
     }
 
+    ; <client numeric> <new nick>
+    elseif ( $1 === NewNick ) { 
+      var %spr.nn $3
+      var %spr.on $ms.get.client(oldnick,$2) $+($chr(40),$ms.get.client(ident,$2),@,$ms.get.client(host,$2),$chr(41))
+      ms.servicebot.say %ms.sb.spybot.numeric $ms.sb.get(chan,spybot) User %spr.on changed nick to: %spr.nn
+      return
+    }
     ; AC
     elseif ( $1 === AC ) { 
       return
@@ -184,7 +191,117 @@ alias ms.spybot.debug {
   }
 }
 
-; Spybot privmsg and channel commands
+; <client numeric> <targetchan\targetclient numeric> :<message>
 alias ms.spybot.privmsg { 
+  var %ms.sp.pmsg.cmd $mid($3,2,9999)
+  var %ms.sp.pmsg.msg $4-
+  var %ms.sp.pmsg.nickchan %ms.sb.spybot.numeric $ms.sb.get(chan,spybot)
+  
+  ; Nickhistory
+  if ( $istok(!nickhistory !nh,%ms.sp.pmsg.cmd,32) ) { 
+    if ( %ms.sp.pmsg.msg ) { 
+      ; If arg1 is nick
+      if ( $ms.get.client(numeric,%ms.sp.pmsg.msg) ) { 
+        var %ms.sb.nh.num $v1
+        var %ms.sb.nh.i $numtok($ms.db(read,nh,$v1),44)
+      }
+      ; elseif arg1 is nicknumeric
+      elseif ( $ms.get.client(nick,%ms.sp.pmsg.msg) ) { 
+        var %ms.sb.nh.num %ms.sp.pmsg.msg
+        var %ms.sb.nh.i $numtok($ms.db(read,nh,%ms.sp.pmsg.msg),44)
+      }
+      if (%ms.sb.nh.num) { 
+        ms.servicebot.say %ms.sp.pmsg.nickchan Nick history for: $ms.get.client(nick,%ms.sb.nh.num) $+($chr(40),%ms.sb.nh.num,$chr(41))
+        ms.servicebot.say %ms.sp.pmsg.nickchan Number of nicks: %ms.sb.nh.i
+        while ( %ms.sb.nh.i ) {
+          ms.servicebot.say %ms.sp.pmsg.nickchan Nick: $gettok($gettok($ms.db(read,nh,%ms.sb.nh.num),%ms.sb.nh.i,44),1,32) at $asctime($gettok($gettok($ms.db(read,nh,%ms.sb.nh.num),%ms.sb.nh.i,44),2,32),dd mmm yyyy hh:mm:ss)
+          dec %ms.sb.nh.i
+        }
+      }
+      else { ms.servicebot.say %ms.sp.pmsg.nickchan No such nick or nicknumeric found in database | return }
+    }
+    else { ms.servicebot.say %ms.sp.pmsg.nickchan Use !nickhistory <nick\nicknumeric> to get the nick history of a user }
+  }
+  ; whois
+  if ( $istok(!whois !w,%ms.sp.pmsg.cmd,32) ) { 
+    if ( %ms.sp.pmsg.msg ) { 
+      if ( $ms.get.client(numeric,%ms.sp.pmsg.msg) ) { 
+        var %ms.sb.wn.num $v1
+      }
+      elseif ( $ms.get.client(nick,%ms.sp.pmsg.msg) ) { 
+        var %ms.sb.wn.num %ms.sp.pmsg.msg
+      }
+      if ( %ms.sb.wn.num ) { 
+        ms.servicebot.say %ms.sp.pmsg.nickchan Whois info for: $ms.get.client(nick,%ms.sb.wn.num) $+($chr(40),%ms.sb.wn.num,$chr(41))
+        ms.servicebot.say %ms.sp.pmsg.nickchan Userinfo: $+($ms.get.client(ident,%ms.sb.wn.num),@,$ms.get.client(host,%ms.sb.wn.num)) $+($chr(40),$base64toip($ms.get.client(base64ip,%ms.sb.wn.num)),$chr(41))
+        ms.servicebot.say %ms.sp.pmsg.nickchan Realname: $ms.get.client(realname,%ms.sb.wn.num)
+        ms.servicebot.say %ms.sp.pmsg.nickchan Channels: $replace($ms.db(read,l,%ms.sb.wn.num),$chr(44),$chr(32))
+        ms.servicebot.say %ms.sp.pmsg.nickchan Server: $ms.get.server(name,$ms.get.client(server,%ms.sb.wn.num)) $+($chr(40),$ms.get.client(server,%ms.sb.wn.num),$chr(41))
+        ms.servicebot.say %ms.sp.pmsg.nickchan Modes: $ms.get.client(modes,%ms.sb.wn.num)
+        ms.servicebot.say %ms.sp.pmsg.nickchan Account: $ms.get.client(account,%ms.sb.wn.num)
+      }
+      else { ms.servicebot.say %ms.sp.pmsg.nickchan No such nick or nicknumeric found in database | return }
+
+    }
+    else { ms.servicebot.say %ms.sp.pmsg.nickchan Use !whois <nick\nicknumeric> to get the whois information of a user }
+  }
+  
+  ; who #chan
+  if ( $istok(!who,%ms.sp.pmsg.cmd,32) ) { 
+    if ( %ms.sp.pmsg.msg ) { 
+
+      ; Check if we are doing !who server or !who #channel
+      if ( $ms.get.channel(createtime,%ms.sp.pmsg.msg) ) { 
+        var %ms.sb.who.chan %ms.sp.pmsg.msg
+        var %ms.sb.who.nicks $ms.db(read,l,%ms.sb.who.chan)
+        var %ms.sb.who.i $numtok(%ms.sb.who.nicks,44)
+        while (%ms.sb.who.i) {
+          if ( $gettok($gettok(%ms.sb.who.nicks,%ms.sb.who.i,44),2,58) == vo ) {
+            var %ms.sb.who.nicknum $gettok($gettok(%ms.sb.who.nicks,%ms.sb.who.i,44),1,58)
+            var %ms.sb.who.nickchmode voicedoped
+          }
+          elseif ( $gettok($gettok(%ms.sb.who.nicks,%ms.sb.who.i,44),2,58) == o ) {
+            var %ms.sb.who.nicknum $gettok($gettok(%ms.sb.who.nicks,%ms.sb.who.i,44),1,58)
+            var %ms.sb.who.nickchmode oped
+          }
+          elseif ( $gettok($gettok(%ms.sb.who.nicks,%ms.sb.who.i,44),2,58) == v ) {
+            var %ms.sb.who.nicknum $gettok($gettok(%ms.sb.who.nicks,%ms.sb.who.i,44),1,58)
+            var %ms.sb.who.nickchmode voiced
+          }
+          else { 
+            var %ms.sb.who.nicknum $gettok(%ms.sb.who.nicks,%ms.sb.who.i,44)
+            var %ms.sb.who.nickchmode normal
+          }
+          var %ms.sb.who.nick $+($replace(%ms.sb.who.nickchmode,voicedoped,@+,oped,@,voiced,+,normal,$null),$ms.get.client(nick,%ms.sb.who.nicknum))
+          var %ms.sb.who.identhost $+($ms.get.client(ident,%ms.sb.who.nicknum),@,$ms.get.client(host,%ms.sb.who.nicknum))
+          var %ms.sb.who.base64ip $base64toip($ms.get.client(base64ip,%ms.sb.who.nicknum))
+          var %ms.sb.who.realname $ms.get.client(realname,%ms.sb.who.nicknum)
+          var %ms.sb.who.modes $ms.get.client(modes,%ms.sb.who.nicknum)
+          var %ms.sb.who.account $ms.get.client(account,%ms.sb.who.nicknum)
+          ms.servicebot.say %ms.sp.pmsg.nickchan User %ms.sb.who.i $+ : %ms.sb.who.nick $+($chr(40),%ms.sb.who.nicknum,$chr(41)) %ms.sb.who.identhost $+($chr(40),%ms.sb.who.base64ip,$chr(41)) * %ms.sb.who.realname Modes: %ms.sb.who.modes Account: %ms.sb.who.account
+          dec %ms.sb.who.i
+        }
+      }
+      elseif ( $ms.get.server(numeric,%ms.sp.pmsg.msg) ) { 
+        var %ms.sb.who.srvnum $v1
+        var %ms.sb.who.server %ms.sp.pmsg.msg
+        var %ms.sb.who.nicks $ms.db(read,l,%ms.sb.who.srvnum)
+        var %ms.sb.who.i $numtok(%ms.sb.who.nicks,44)
+        while (%ms.sb.who.i) {
+          var %ms.sb.who.nicknum $gettok($gettok(%ms.sb.who.nicks,%ms.sb.who.i,44),1,32)
+          var %ms.sb.who.nick $ms.get.client(nick,%ms.sb.who.nicknum)
+          var %ms.sb.who.identhost $+($ms.get.client(ident,%ms.sb.who.nicknum),@,$ms.get.client(host,%ms.sb.who.nicknum))
+          var %ms.sb.who.base64ip $base64toip($ms.get.client(base64ip,%ms.sb.who.nicknum))
+          var %ms.sb.who.realname $ms.get.client(realname,%ms.sb.who.nicknum)
+          var %ms.sb.who.modes $ms.get.client(modes,%ms.sb.who.nicknum)
+          var %ms.sb.who.account $ms.get.client(account,%ms.sb.who.nicknum)
+          ms.servicebot.say %ms.sp.pmsg.nickchan User %ms.sb.who.i $+ : %ms.sb.who.nick $+($chr(40),%ms.sb.who.nicknum,$chr(41)) %ms.sb.who.identhost $+($chr(40),%ms.sb.who.base64ip,$chr(41)) * %ms.sb.who.realname Modes: %ms.sb.who.modes Account: %ms.sb.who.account
+          dec %ms.sb.who.i
+        }
+      }
+      else { ms.servicebot.say %ms.sp.pmsg.nickchan No such channel found in database | return }
+    }
+    else { ms.servicebot.say %ms.sp.pmsg.nickchan Use !who <#channel\servername> to get the who information of a channel }
+  }
   return
 }

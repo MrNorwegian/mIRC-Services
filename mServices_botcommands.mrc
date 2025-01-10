@@ -127,6 +127,16 @@ alias ms.servicebot.whois {
   mServices.sraw 318 $1 $3 :End of /WHOIS list.
 }
 
+; Todo, this is not yet called
+alias ms.servicebot.p10.Newclient {
+  if ( %mServices.loaded.spybot == true ) { ms.spybot.report N $1- }
+}
+
+; <client numeric> <new nick>
+alias ms.servicebot.p10.nick { 
+  if ( %mServices.loaded.spybot == true ) { ms.spybot.report NewNick $1- }
+}
+
 ; <server numeric> <client numeric> <account id>
 alias ms.servicebot.p10.account { 
   if ( %mServices.loaded.spybot == true ) { ms.spybot.report AC $1- }

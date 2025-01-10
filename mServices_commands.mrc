@@ -23,7 +23,7 @@ alias mServices.sraw {
 alias mServices.start {
   if ( $mServices.config(configured) == NO ) { ms.echo red Server is not configured. Please check mServices.* variables before starting the server. ( Alt + R ) | halt }
   if ($sock(mServices) != $null) { ms.echo orange Server is already running | return }
-  
+
   ; First stage, open a connection to the server
   sockopen mServices $mServices.config(hostname) $mServices.config(port)
   ms.echo green [mServices IRC Server] Starting server
@@ -123,6 +123,8 @@ alias ms.newclient {
     ms.db write c %ms.nc.num $addtok($ms.db(read,c,%ms.nc.num),base64ip %ms.nc.base64ip,44)
     ms.db write c %ms.nc.num $addtok($ms.db(read,c,%ms.nc.num),realname %ms.nc.realname,44)
 
+    ms.db write nh %ms.nc.num %ms.nc.nick %ms.nc.timestamp
+
     ; note the clients to it's server, not that important but might be useful
     ; AND this is bugy, max 5500 clients due to max line length in .ini files (dunno in hash)
     ; use $numtok and make list2, list3 etc, or abondon this idea and use $hget() instead to get number of clients (does not work with ini db)
@@ -135,8 +137,11 @@ alias ms.newclient {
     var %ms.nc.num $1
     var %ms.nc.newnick $3
     var %ms.nc.timestamp $4
-    ms.db write c %ms.nc.num $reptok($ms.db(read,c,%ms.nc.num),$gettok($ms.db(read,c,%ms.nc.num),2,44),nick %ms.nc.newnick,44)
-    ms.db write c %ms.nc.num $reptok($ms.db(read,c,%ms.nc.num),$gettok($ms.db(read,c,%ms.nc.num),4,44),timestamp %ms.nc.timestamp,44)
+    ms.change.client nick %ms.nc.num %ms.nc.newnick
+    ms.db write nh %ms.nc.num $addtok($ms.db(read,nh,%ms.nc.num),$+($ms.get.client(nick,%ms.nc.num) %ms.nc.timestamp),44)
+    ms.servicebot.p10.nick %ms.nc.num %ms.nc.newnick 
+    ; ms.db write c %ms.nc.num $reptok($ms.db(read,c,%ms.nc.num),$gettok($ms.db(read,c,%ms.nc.num),2,44),nick %ms.nc.newnick,44)
+    ; ms.db write c %ms.nc.num $reptok($ms.db(read,c,%ms.nc.num),$gettok($ms.db(read,c,%ms.nc.num),4,44),timestamp %ms.nc.timestamp,44)
   }
   return
 }
@@ -165,6 +170,8 @@ alias ms.newserver {
     var %ms.ns.flags $iif($mid($8,2,3),$mid($8,2,3),none)
     var %ms.ns.desc $mid($9,2,99) $10-
     set %ms.myhub %ms.ns.num
+    set %ms.myhubnum %ms.ns.num
+    set %ms.myhubname %ms.ns.name
   }
   elseif ( $2 === S ) { 
     var %ms.ns.servernumeric $1
@@ -277,7 +284,7 @@ alias ms.burstchannels {
     elseif ( %ms.bc.oped == true ) && ( %ms.bc.voiced != true ) { var %tmp.users $iif($gettok(%c,2,58) == o,$addtok(%tmp.users,%c,44),$addtok(%tmp.users,$+(%c,$chr(58),o),44))  }
     elseif ( %ms.bc.voiceandop == true ) { var %tmp.users $iif($gettok(%c,2,58) == vo,$addtok(%tmp.users,%c,44),$addtok(%tmp.users,$+(%c,$chr(58),vo),44)) }
     else { var %tmp.users $addtok(%tmp.users,%c,44) }
-    ms.db write l $gettok(%c,1,58) $addtok($ms.db(read,l,%c),%ms.bc.chan,44)
+    ms.db write l $gettok(%c,1,58) $addtok($ms.db(read,l,$gettok(%c,1,58)),%ms.bc.chan,44)
     inc %i
   }
   ms.db write l %ms.bc.chan %tmp.users
@@ -345,7 +352,7 @@ alias ms.client.part {
       else { ms.db write l %ch $remtok(%n,%ms.cl.num,44) }
     }
     ; Check if this was the last channel for the client
-    if ( $istok($ms.db(read,l,%ms.cl.num),%ch,44) <= 1 ) { ms.db rem l %ms.cl.num }
+    if ( $numtok($ms.db(read,l,%ms.cl.num),44) <= 1 ) { ms.db rem l %ms.cl.num }
     else { ms.db write l %ms.cl.num $remtok($ms.db(read,l,%ms.cl.num),%ch,44) }
     ms.db write l channels $remtok($ms.db(read,l,channels),%ch,44)
     ms.echo blue [IAL DB] Client %ms.cl.num parted channel %ch
@@ -412,7 +419,7 @@ alias ms.mode.client {
   return
 }
 
-; modes $1 %ms.mc.modes
+; /ms.change.client nick\ident\host\modes\ac\account\auth\baseip64 realname numeric newnick
 alias ms.change.client {
   if ( $3 ) {
     if ( $ms.db(read,c,$2) ) { 
@@ -461,12 +468,22 @@ alias ms.change.client {
 alias ms.get.client {
   if ( $1 == numeric ) && ( $2 ) { 
     var %ms.get.clnum.i $hfind(clients,$+($chr(42),nick $2,$chr(42)),0,w).data
+
+    ; Search for the client numeric
     while ( %ms.get.clnum.i ) {
       var %ms.get.clnum $hfind(clients,$+($chr(42),nick $2,$chr(42)),%ms.get.clnum.i,w).data
       var %ms.get.clnick $gettok($gettok($ms.db(read,c,%ms.get.clnum),2,44),2,32)
+
+      ; Confirm we found the right nick
       if ( %ms.get.clnick == $2 ) { return %ms.get.clnum }
       dec %ms.get.clnum.i
     }
+  }
+  if ( $1 == oldnick ) && ( $2 ) { 
+    var %ms.get.nhnum $numtok($ms.db(read,nh,$2),44)
+    if ( %ms.get.nhnum >= 2 ) { return $gettok($gettok($ms.db(read,nh,$2),$calc(%ms.get.nhnum - 1),44),1,32) }
+    else { return $null } 
+    ; no nick history (never changed nick)
   }
   elseif ( $ms.db(read,c,$2) ) { 
     var %msgc $v1
@@ -484,7 +501,32 @@ alias ms.get.client {
   }
 }
 
+alias ms.get.channel {
+  if ( $ms.db(read,ch,$2) ) { 
+    var %msgc $v1
+    if ( $1 == createtime ) { return $gettok($gettok(%msgc,1,44),2,32) }
+    elseif ( $1 == chanmodes ) { return $gettok($gettok(%msgc,2,44),2,32) }
+    elseif ( $1 == chanlimit ) { return $gettok($gettok(%msgc,3,44),2,32) }
+    elseif ( $1 == chankey ) { return $gettok($gettok(%msgc,4,44),2,32) }
+    elseif ( $1 == bans ) { return $gettok($gettok(%msgc,5,44),2-,32) }
+    else { return $null }
+  }
+}
+
 alias ms.get.server { 
+  if ( $1 == numeric ) && ( $2 ) { 
+    var %ms.get.srvnum.i $hfind(servers,$+($chr(42),name $2,$chr(42)),0,w).data
+
+    ; Search for the server numeric
+    while ( %ms.get.srvnum.i ) {
+      var %ms.get.srvnum $hfind(servers,$+($chr(42),name $2,$chr(42)),%ms.get.srvnum.i,w).data
+      var %ms.get.srvname $gettok($gettok($ms.db(read,s,%ms.get.srvnum),1,44),2,32)
+
+      ; Confirm we found the right server
+      if ( %ms.get.srvname == $2 ) { return %ms.get.srvnum }
+      dec %ms.get.srvnum.i
+    }
+  }
   if ( $ms.db(read,s,$2) ) { 
     var %msgs $v1
     if ( $1 == name ) { return $gettok($gettok(%msgs,1,44),2,32) }
@@ -513,6 +555,7 @@ alias ms.db.reset {
   ms.db rem c
   ms.db rem ch
   ms.db rem l
+  ms.db rem nh
   ms.db rem config
   if ( $hget(servers) ) { hfree servers | hmake -s servers 100 }
   else { hmake -s servers 100 }
@@ -522,6 +565,8 @@ alias ms.db.reset {
   else { hmake -s channels 1000 }
   if ( $hget(list) ) { hfree list | hmake -s list 10000 }
   else { hmake -s list 10000 }
+  if ( $hget(nickhistory) ) { hfree nickhistory | hmake -s nickhistory 10000 }
+  else { hmake -s nickhistory 10000 }
   if ( $hget(config) ) { hfree config | hmake -s config 100 }
   else { hmake -s config 100 }
 }
@@ -541,6 +586,7 @@ alias ms.db {
     elseif ( $2 == c ) { var %db.file ms.ial.ini | var %db.topic clients | var %db.hash clients }
     elseif ( $2 == ch ) { var %db.file ms.ial.ini | var %db.topic channels | var %db.hash channels }
     elseif ( $2 == l ) { var %db.file ms.ial.ini | var %db.topic list | var %db.hash list }
+    elseif ( $2 == nh ) { var %db.file ms.ial.ini | var %db.topic nickhistory | var %db.hash nickhistory }
     elseif ( $2 == config ) { var %db.file ms.ial.ini | var %db.topic config | var %db.hash config }
     else { var %db.file $+($2,.ini) | var %db.hash $2 }
 
@@ -600,6 +646,12 @@ alias ms.db {
     while (%l) { 
       echo -a %l $hget(list,%l).item $hget(list,%l).data
       dec %l
+    }
+    var %nh $hget(nickhistory,0).data
+    echo $+(Total nickhistory: %nh)
+    while (%nh) { 
+      echo -a %nh $hget(nickhistory,%nh).item $hget(nickhistory,%nh).data
+      dec %nh
     }
     var %l $hget(config,0).data
     echo $+(Total config: %l)
