@@ -33,6 +33,9 @@ alias mServices.start {
 alias mServices.stop {
   if ($sock(mServices) == $null) { ms.echo orange Server is not running | return }
   ms.echo green [mServices mIRC Server] Stopping the server
+
+  set %ms.status stopped
+  ; TODO, servicebots is not quiting properly, need to fix this
   ms.stop.servicebots $mServices.config(servicebots)
   mServices.sraw SQ %mServices.serverName now :Server shutdown
   sockclose $sock(mServices) 
@@ -146,13 +149,13 @@ alias ms.newclient {
   return
 }
 
-; <Server numeric> AC|ACCOUNT <client numeric> <account accountid>
+; <Server numeric> AC <client numeric> <account accountid>
 alias ms.account {
   var %ms.ac.srvnum $1
   var %ms.ac.client $3
   var %ms.ac.account $4 $5
   ms.change.client account %ms.ac.client %ms.ac.account
-  ms.servicebot.p10.account %ms.ac.srvnum %ms.ac.num %ms.ac.account
+  ms.servicebot.p10.account %ms.ac.srvnum %ms.ac.client %ms.ac.account
   return
 }
 
@@ -220,8 +223,12 @@ alias ms.remserver {
 alias ms.burstchannels {
   var %ms.bc.chan $3
   var %ms.bc.createtime $4
+
+  ; TODO If only createtime is sent, this needs to be handled later maby ?
+  if (!$5) { return }
+
   ; if + isin $3
-  if ( $left($5,1) == $chr(43) ) { 
+  elseif ( $left($5,1) == $chr(43) ) { 
     var %ms.bc.chanmodes $5
     if ( l isin $5 ) && ( k !isin $5 ) {
       var %ms.bc.chanlimit $6
@@ -284,7 +291,9 @@ alias ms.burstchannels {
     elseif ( %ms.bc.oped == true ) && ( %ms.bc.voiced != true ) { var %tmp.users $iif($gettok(%c,2,58) == o,$addtok(%tmp.users,%c,44),$addtok(%tmp.users,$+(%c,$chr(58),o),44))  }
     elseif ( %ms.bc.voiceandop == true ) { var %tmp.users $iif($gettok(%c,2,58) == vo,$addtok(%tmp.users,%c,44),$addtok(%tmp.users,$+(%c,$chr(58),vo),44)) }
     else { var %tmp.users $addtok(%tmp.users,%c,44) }
-    ms.db write l $gettok(%c,1,58) $addtok($ms.db(read,l,$gettok(%c,1,58)),%ms.bc.chan,44)
+    var %ms.bc.nnum $gettok(%c,1,58)
+    ms.db write l %ms.bc.nnum $addtok($ms.db(read,l,%ms.bc.nnum),%ms.bc.chan,44)
+    ms.db write chhi %ms.bc.nnum $addtok($ms.db(read,chhi,%ms.bc.nnum),$+(%ms.bc.chan $ctime),44)
     inc %i
   }
   ms.db write l %ms.bc.chan %tmp.users
@@ -302,6 +311,7 @@ alias ms.channel.create {
     ms.db write ch %ch $addtok($ms.db(read,ch,%ch),$+(chanmodes NONE,$chr(44),chanlimit NONE,$chr(44),chankey NONE,$chr(44),bans NONE),44)
     ms.db write l %ch $+(%ms.cc.num,$chr(58),o)
     ms.db write l %ms.cc.num $addtok($ms.db(read,l,%ms.cc.num),%ch,44)
+    ms.db write chhi %ms.cc.num $addtok($ms.db(read,chhi,%ms.cc.num),$+(%ch %ms.cc.timestamp),44)
 
     if (!$istok($ms.db(read,l,channels),%ch,44)) { ms.db write l channels $addtok($ms.db(read,l,channels),%ch,44) }
     ms.echo blue [IAL DB] Client %ms.cc.num created %ch
@@ -323,6 +333,7 @@ alias ms.client.join {
     if (!$istok($ms.db(read,l,%ch),%ms.cj.num,44) ) { 
       ms.db write l %ch $addtok($ms.db(read,l,%ch),%ms.cj.num,44)
       ms.db write l %ms.cj.num $addtok($ms.db(read,l,%ms.cj.num),%ch,44)
+      ms.db write chhi %ms.cj.num $addtok($ms.db(read,chhi,%ms.cj.num),$+(%ch %ms.cj.timestamp),44)
       ms.echo blue [IAL DB] Client %ms.cj.num joined %ch
     }
     dec %c
@@ -384,6 +395,7 @@ alias ms.client.quit {
     if ( %ms.spybot.report == true ) { ms.spybot.report Q $1 $2- }
     var %ms.cq.srvnum $gettok($gettok($ms.db(read,c,%ms.cq.num),1,44),2,32)
     ms.db rem c %ms.cq.num
+    ms.db rem nh %ms.cq.num
     if ( $numtok($ms.db(read,l,%ms.cq.srvnum),44) <= 1 ) { ms.db rem l %ms.cq.srvnum }
     else { ms.db write l %ms.cq.srvnum $remtok($ms.db(read,l,%ms.cq.srvnum),%ms.cq.num,44) }
     ms.echo blue [IAL DB] Removed client %ms.cq.num from server
@@ -403,9 +415,55 @@ alias ms.mode.channel {
   return
 }
 
+; BbAC6 #testchan -v+tnklo IAAAA code 123 BdAAA 1000000000
+; BdAAA #testchan +m 1000000000
+; BdAAA #testchan +o IAAAX 1000000000
+; BdAAA #testchan +b test!test@test.lame 1000000000
+; BdAAA #testchan -mb+lo test!test@test.lame 123 BbAAC 1000000000
+; <client numeric> <channel> <+-modes> <arg1 arg2 arg3 arg4 etc> <timestamp>
 alias ms.change.channel {
-  if ($4) { 
-    return
+  if ( $1 == modes ) {
+    if ($4) {
+      var %ms.cc.data $ms.db(read,ch,$3)
+      var %ms.cc.num $2
+      var %ms.cc.chan $3
+      var %ms.cc.modes $4
+
+      var %ms.cc.oldmode $ms.get.channel(mode,%ms.cc.chan)
+      var %ms.cc.mode.new $ms.get.channel(mode,%ms.cc.chan)
+      var %i 1
+      var %len $len(%ms.cc.modes)
+      while (%i <= %len) {
+        var %char $mid(%ms.cc.modes,%i,1)
+        if (%char == +) { var %action add }
+        elseif (%char == -) { var %action remove }
+        echo -a Action: %action Char %char Modes %ms.cc.modes
+
+        ; TODO
+        ; Check if +ov or +b
+        if (%action == add) { 
+          if ( %ms.cc.oldmode == NONE ) { var %ms.cc.mode.new $+(+,%char) }
+          else { var %ms.cc.mode.new $+(%ms.cc.mode.new,%char) }
+        }
+        elseif (%action == remove) { 
+          if ( $len(%ms.cc.mode.new) <= 2 ) { var %ms.cc.mode.new NONE }
+          else { var %ms.cc.mode.new $remove(%ms.cc.mode.new,%char,32) }
+        }
+        inc %i
+      }
+      echo DATA %ms.cc.data
+      ; ms.db write ch %ms.cc.chan $puttok(%ms.cc.data,chanmodes %ms.cc.mode.new,2,44)
+      ; if +k isin $3
+      if ( k isin $3 ) { 
+        var %ms.cc.key $4
+      }
+      elseif ( l isin $3 ) { 
+        var %ms.cc.limit $4
+      }
+      var %ms.cc.args $4
+      var %ms.cc.timestamp $5
+      return
+    }
   }
 }
 
@@ -463,8 +521,7 @@ alias ms.change.client {
 }
 
 ; $ms.get.client(nick,clientNUMERIC) $ms.get.client(modes,clientNUMERIC) $ms.get.client(numeric,clientNICK) etc
-; extept: $ms.get.client(numeric,clientNICK)
-
+; $ms.get.client(numeric,clientNICK)
 alias ms.get.client {
   if ( $1 == numeric ) && ( $2 ) { 
     var %ms.get.clnum.i $hfind(clients,$+($chr(42),nick $2,$chr(42)),0,w).data
@@ -501,15 +558,51 @@ alias ms.get.client {
   }
 }
 
+; $ms.get.channel(createtime,#chan) $ms.get.channel(chanmodes,#chan) etc
 alias ms.get.channel {
   if ( $ms.db(read,ch,$2) ) { 
     var %msgc $v1
     if ( $1 == createtime ) { return $gettok($gettok(%msgc,1,44),2,32) }
     elseif ( $1 == chanmodes ) { return $gettok($gettok(%msgc,2,44),2,32) }
+    elseif ( $1 == modes ) { return $gettok($gettok(%msgc,2,44),2,32) }
     elseif ( $1 == chanlimit ) { return $gettok($gettok(%msgc,3,44),2,32) }
+    elseif ( $1 == limit ) { return $gettok($gettok(%msgc,3,44),2,32) }
     elseif ( $1 == chankey ) { return $gettok($gettok(%msgc,4,44),2,32) }
-    elseif ( $1 == bans ) { return $gettok($gettok(%msgc,5,44),2-,32) }
+    elseif ( $1 == key ) { return $gettok($gettok(%msgc,4,44),2,32) }
+    elseif ( $1 == bans ) { return $gettok($gettok(%msgc,5,44),2,32) }
     else { return $null }
+  }
+}
+
+; 
+alias ms.get.mode {
+  return
+}
+
+; $ms.is(numeric\nick,#chan,on,op,voice,reg)
+alias ms.is {
+  if ( $1 ) {
+    if ( $ms.get.channel(createtime,$2) ) { 
+      if ( $ms.get.client(numeric,$1) ) { var %ms.ison.num $v1 }
+      elseif ( $ms.get.client(nick,$1) ) { var %ms.ison.num $1 }
+      else { ms.echo red [IsOn] $1 is not a valid client numeric or nick | return }
+      var %ms.ison.nicks $ms.db(read,l,$2)
+      var %ms.ison.i $numtok(%ms.ison.nicks,44)
+      while ( %ms.ison.i ) {
+
+        ; is on\op\voice\regular user check
+        if ( $gettok($gettok(%ms.ison.nicks,%ms.ison.i,44),1,58) === %ms.ison.num ) {
+          if ( $3 == on ) { var %ms.ison.result true }
+          elseif ( $3 == op ) && ( $gettok($gettok(%ms.ison.nicks,%ms.ison.i,44),2,58) == o ) || ( $gettok($gettok(%ms.ison.nicks,%ms.ison.i,44),2,58) == vo ) { var %ms.ison.result true }
+          elseif ( $3 == voice ) && ( $gettok($gettok(%ms.ison.nicks,%ms.ison.i,44),2,58) == v ) || ( $gettok($gettok(%ms.ison.nicks,%ms.ison.i,44),2,58) == vo ) { var %ms.ison.result true }
+          elseif ( $3 == reg ) &&( $gettok($gettok(%ms.ison.nicks,%ms.ison.i,44),2,58) != o ) && ( $gettok($gettok(%ms.ison.nicks,%ms.ison.i,44),2,58) != v ) { var %ms.ison.result true }
+        }
+        dec %ms.ison.i
+      }
+      if ( %ms.ison.result == true ) { return true }
+      else { return false }
+    }
+    else { ms.echo red [Is] $2 is not a existing channel | return }
   }
 }
 
@@ -567,6 +660,8 @@ alias ms.db.reset {
   else { hmake -s list 10000 }
   if ( $hget(nickhistory) ) { hfree nickhistory | hmake -s nickhistory 10000 }
   else { hmake -s nickhistory 10000 }
+  if ( $hget(chanhistory) ) { hfree chanhistory | hmake -s chanhistory 10000 }
+  else { hmake -s chanhistory 10000 }
   if ( $hget(config) ) { hfree config | hmake -s config 100 }
   else { hmake -s config 100 }
 }
@@ -586,7 +681,8 @@ alias ms.db {
     elseif ( $2 == c ) { var %db.file ms.ial.ini | var %db.topic clients | var %db.hash clients }
     elseif ( $2 == ch ) { var %db.file ms.ial.ini | var %db.topic channels | var %db.hash channels }
     elseif ( $2 == l ) { var %db.file ms.ial.ini | var %db.topic list | var %db.hash list }
-    elseif ( $2 == nh ) { var %db.file ms.ial.ini | var %db.topic nickhistory | var %db.hash nickhistory }
+    elseif ( $2 == nh ) { var %db.file ms.ial.ini | var %db.topic nickhistory | var %db.hash nickhistory | var %db.history ms.history.ini }
+    elseif ( $2 == chhi ) { var %db.file ms.ial.ini | var %db.topic chanhistory | var %db.hash chanhistory | var %db.history ms.history.ini }
     elseif ( $2 == config ) { var %db.file ms.ial.ini | var %db.topic config | var %db.hash config }
     else { var %db.file $+($2,.ini) | var %db.hash $2 }
 
@@ -603,6 +699,9 @@ alias ms.db {
       if ( %db.arg2 ) { 
         if ( %ms.db.type = ini ) { writeini %db.file %db.topic %db.arg1 %db.arg2 }
         elseif ( %ms.db.type = hash ) { hadd %db.hash %db.arg1 %db.arg2 }
+
+        ; This is for longterm storage of nickhistory and chanhistory, read TODO before enabling
+        ;if ( $istok(chhi nh,$2,32) ) { writeini %db.history %db.topic %db.arg1 %db.arg2 ;}
       }
       ; TODO it IS possible to write empty values, but it's not possible to read them, so we might want to write empty values as NONE ? *think*
       else { ms.echo red DB write error, missing arg2: $1- }
@@ -624,37 +723,44 @@ alias ms.db {
 
   elseif ( $1 == list ) && ( %ms.db.type == hash ) { 
     var %c $hget(clients,0).data
-    echo $+(Total clients: %c)
+    echo 7 $+(Total clients: %c)
     while (%c) { 
       echo -a %c $hget(clients,%c).item $hget(clients,%c).data
       dec %c
     }
     var %s $hget(servers,0).data
-    echo $+(Total servers: %s)
+    echo 7 $+(Total servers: %s)
     while (%s) { 
       echo -a %s $hget(servers,%s).item $hget(servers,%s).data
       dec %s
     }
     var %ch $hget(channels,0).data
-    echo $+(Total channels: %ch)
+    echo 7 $+(Total channels: %ch)
     while (%ch) { 
       echo -a %ch $hget(channels,%ch).item $hget(channels,%ch).data
       dec %ch
     }
+
     var %l $hget(list,0).data
-    echo $+(Total list: %l)
+    echo 7 $+(Total list: %l)
     while (%l) { 
       echo -a %l $hget(list,%l).item $hget(list,%l).data
       dec %l
     }
     var %nh $hget(nickhistory,0).data
-    echo $+(Total nickhistory: %nh)
+    echo 7 $+(Total nickhistory: %nh)
     while (%nh) { 
       echo -a %nh $hget(nickhistory,%nh).item $hget(nickhistory,%nh).data
       dec %nh
     }
+    var %chhistory $hget(chanhistory,0).data
+    echo 7 $+(Total chanhistory: %chhistory)
+    while (%chhistory) { 
+      echo -a %chhistory $hget(chanhistory,%chhistory).item $hget(chanhistory,%chhistory).data
+      dec %chhistory
+    }
     var %l $hget(config,0).data
-    echo $+(Total config: %l)
+    echo 7 $+(Total config: %l)
     while (%l) { 
       echo -a %l $hget(config,%l).item $hget(config,%l).data
       dec %l

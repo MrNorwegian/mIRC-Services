@@ -1,7 +1,14 @@
+; Just a little cheatsheet to remember lots of custom commands
 
 $ms.get.client(numeric\nick\ident\host,numeric\nick) can also be realanme,account,ac,auth,etc
+
 $ms.get.server(numeric\name\hop\starttime\linktime\maxcon\flags\desc,numeric\name)
-$ms.get.channel(createtime\chanmodes\chanlimit\chankey\bans,#channel)
 
+$ms.get.channel(createtime\chanmodes\chanlimit\chankey\bans,#chan)
 
+$ms.is(nicknumeric,#chan,on\op\voice\reg) 
+- if ( $ms.is(AABBB,#chan,op) == true ) 
 
+; Getting configuration for server and servicebots
+$ms.config.get(numeric\nick\ident\host,botname\botnumeric)
+; Other arg1: configured load nick fullnumericISTODO numeric user host ip realname modes account chan channels debug debugchan report reportchan adminchan

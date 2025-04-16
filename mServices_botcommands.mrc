@@ -97,11 +97,6 @@ alias ms.servicebot.join {
 
 ; Passing p10 messages to modules
 
-; <client numeric> <target nick> <target chan>
-alias ms.servicebot.invited {
-  if ( %mServices.loaded.funbots ) { ms.funbots.invited $1- }
-}
-
 ; client numeric> <channel> <target numeric>
 alias ms.servicebot.kicked {
   ; Need to another way to check if kicked bot is a funbot,gamebot or servicebot like spybot,x,euworld what cannot be kicked but was
@@ -137,7 +132,7 @@ alias ms.servicebot.p10.nick {
   if ( %mServices.loaded.spybot == true ) { ms.spybot.report NewNick $1- }
 }
 
-; <server numeric> <client numeric> <account id>
+; <Server numeric> AC <client numeric> <account accountid>
 alias ms.servicebot.p10.account { 
   if ( %mServices.loaded.spybot == true ) { ms.spybot.report AC $1- }
 }
@@ -165,6 +160,11 @@ alias ms.servicebot.p10.chparted {
   }
 }
 
+; <client numeric> <target nick> <target chan>
+alias ms.servicebot.p10.invited { 
+  if ( %mServices.loaded.funbots ) { ms.funbots.invited $1- }
+}
+
 ; <client numeric> <target client numeric> <modes>
 alias ms.servicebot.p10.clientmode { 
   if ( %mServices.loaded.spybot == true ) { ms.spybot.report M $1- }
@@ -185,4 +185,9 @@ alias ms.servicebot.p10.privmsg {
     if ( %mServices.loaded.spybot == true ) { ms.spybot.privmsg $1- } 
     if ( %mServices.loaded.cservice == true ) { ms.cservice.privmsg $1- }
   }
+}
+
+; <client numeric> <O|NOTICE> <targetclient numeric> :<message>
+alias ms.servicebot.p10.notice { 
+  return
 }

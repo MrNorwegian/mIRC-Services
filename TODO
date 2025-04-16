@@ -1,19 +1,13 @@
-- When J,L,P messages run it thru ms.servicebots.join\leave\privmsg to and loop thru %ms.servicebots.online  to see if any of the bots is interessed ?
-- For now i'm calling ms.spybot.report directly in mServices_command, but i want to run it thru some other thing, so if spybot scipt file is NOT loaded and ms.spybot.report doest not exist...
-
-* Rename ms.servicebot.invited and ms.servicebot.kicked to ms.servicebot.p10.invited and ms.servicebot.p10.kicked
-- And maby more stuff ? It's for passing p10 messages to modules 
-
+* BIG TODO !!!!!!!!!!!!!!!!!!!
+- ms.change.channel (mode channel)
 * Manage M and OM (mode and opmode)
 - do a little test, M is for both usermode and chanmode, dunno with opmode
 - Must sort +w-i etc and add\remove from database
 
-* make some shortcuts for getting info 
-- ms.getmodes for a channel and user ?
-
-* If ircop whois funbots (and spybot\X etc???) show all channels
-
-* Continue migrate to ms.config.get instead of ms.fb.get ms.sp.get etc
+* Make a listchannels command for all of the
+- funbots
+- gamebot
+- X
 
 * When funbots is on it's last channel and get kicked the db cannot be updated
 - [22:32:05] * /writeini: insufficient parameters (line 60, mServices_botcommands.mrc)
@@ -31,10 +25,31 @@
 - if Bc N do not report or change report text in #spychan and #debug
 - After Bc EA burst of new server is finished 
 
+* Add $ms.spybot.isignored(servername,nickname,channelname) and return true or something if true ? For now i'm doing lots of the same if checks 
 
+* finish fullnumeric in $ms.config.get(arg1,arg2)
+- numeric should return BBB and fullnumeric AABBB, not numeric returns AABBB so there is lots of code needs to be changed
 
+* Check or redo the caching method in $ms.config.get 
+- Suspects caching doesnt get updated if configuration is changed, for now the cache is only valid last 1 second
+
+* Dont remove channel if last client parted, but mark it as empty
+- Later we'll reiceive DE from an server to destruct the channel
 
 * Spybot
-!who (nick)
-!who (chan)
 !whowas (part of !nickhistory)
+!who * for all clients on the network
+
+!whois (add @ and + on channels the user has it)
+- Check if channel is +ps and mark it (so we know, since the bot doesnt care like regular /whois does)
+
+!nickhistory and !chanhistory needs a permanent database, for now it's only in memory
+- Need to change how we are saving chanhistory, ony use ini for once, but also document part\quit and if msl-services has split, dont update jointime ?
+
+* When stopping server, some DB error, and bots is not quiting
+[19:29:52] <mServices> [mServices mIRC Server] Stopping the server
+[19:29:52] <mServices> DB read error, missing arg1: read c
+[19:29:52] <mServices> [Service bot] is not spawned, skipping.
+[19:29:52] <mServices> [Service bot] Despawn IAAAX
+[19:29:52] <mServices> [Sockwrite Client] <-- IAAAX Q :Service bot is leaving the server
+

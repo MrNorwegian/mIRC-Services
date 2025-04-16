@@ -48,7 +48,15 @@ on *:load:{
   ms.echo green Finished loaded modules
 }
 
-on *:sockclose:mServices:{ ms.echo orange [Sockclose] $sockname closed }
+on *:start:{ set %ms.status starting }
+on *:exit:{ mServices.stop }
+
+; TODO, if sockclose happens without a variable set, reconnect
+; - Set variable %ms.status stopped
+on *:sockclose:mServices:{ 
+  if ( %ms.status != stopped ) { ms.echo orange [Sockclose] $sockname closed, reconnecting | mServices.start }
+  else { ms.echo orange [Sockclose] $sockname closed }
+}
 
 on *:sockopen:mServices:{
   if ($sockerr > 0) {
@@ -68,7 +76,7 @@ on *:sockopen:mServices:{
   mServices.raw SERVER $mServices.config(serverName) 1 %ms.startime $ctime P10 $+(%ms.numeric,%ms.maxcon) $mServices.config(flags) $+(:,$mServices.config(info))
   ms.newserver SERVER $mServices.config(serverName) 1 %ms.startime $ctime P10 $+(%ms.numeric,%ms.maxcon) $mServices.config(flags) $+(:,$mServices.config(info))
 
-  ms.echo blue [mServices mIRC Server] Connected to server, waitin for burst and end of burst
+  ms.echo blue [mServices mIRC Server] Connection established
 }
 
 on *:sockread:mServices:{
@@ -92,11 +100,12 @@ on *:sockread:mServices:{
     set %ms.status checking password
     if ( $mid($2,2,99) == $mServices.config(password) ) { 
       ms.echo blue [mServices mIRC Server] Received response with PASS
-      set %ms.status verified password
+      set %ms.status LinkingPass
       return
     }
     else { 
       ms.echo red [mServices mIRC Server] Password is incorrect, closing connection
+      set %ms.status LinkingPass - Failed, wrong password
       sockclose mServices
       return
     }
@@ -107,13 +116,15 @@ on *:sockread:mServices:{
     ; TODO: check if server name is correct and server numeric doesnt crash with us
     ; set %ms.status checking password
     ; set %ms.status verified password
-    ms.echo blue [mServices mIRC Server] Received response with SERVER
+    ms.echo blue [mServices mIRC Server] Received response with SERVER, linked to $2 and waiting for burst
     ms.newserver $1-
-    set %ms.status Bursting
+    set %ms.status LinkingServer
     return
   }
 
+  ; <server numric> S <server name> <hop> <start time> <link time> <protocol> <server numeric(2)+maxconn(3)> [+flags] :Desc
   elseif ($istok(S,$2,32) == $true) {
+    if ( %ms.status == LinkingServer ) { set %ms.status BurstingServers | ms.echo blue [mServices mIRC Server] Bursting servers }
     ms.newserver $1-
     return
   }
@@ -154,7 +165,7 @@ on *:sockread:mServices:{
     return
   }
 
-  ; <Server numeric> AC|ACCOUNT <client numeric> <account accountid>|
+  ; <Server numeric> AC|ACCOUNT <client numeric> <account accountid>
   elseif ($istok(AC ACCOUNT,$2,32) == $true) {
     ; TODO, this is for account stuff
     ms.account $1-
@@ -163,6 +174,10 @@ on *:sockread:mServices:{
 
   ; <server numeric> <N|NICK> <nick> <hop count> <timestamp> <user> <host> <modes> <base64 ip> <clientnumeric> :<real name>
   elseif ($istok(N NICK,$2,32) == $true) {
+
+    ; TODO, need to check if %ms.status is BurstingServers or Bursting, need to test linking a single server and see if that is enough
+    ; if ( %ms.status != BurstingClients ) { ms.echo blue [mServices mIRC Server] Bursting clients ;}
+
     ; This also applies to nickchanges
     ms.newclient $1-
     return
@@ -170,6 +185,7 @@ on *:sockread:mServices:{
 
   ; <server numeric> <B|BURST> <chan> <createtime??> <+chanmodes> BbACg,AoAAH,AzAAE,ABAAv:o,BWAAA,AzAAC,AzAAA,BdAAA
   elseif ($istok(B BURST,$2,32) == $true) {
+    if ( %ms.status != BurstingChannels ) { ms.echo blue [mServices mIRC Server] Bursting channels }
     ms.burstchannels $1-
     return
   }
@@ -194,7 +210,13 @@ on *:sockread:mServices:{
     return
   }
 
-  ; BbAC6 M #testchan -v+tnklo IAAAA kode 123 BdAAA 1000000000
+  ; <Server numeric> <DE|DESTRUCT> <channel> <timestamp>
+  elseif ($istok(DE DESTRUCT,$2,32) == $true) {
+    ;ms.channel.destroy $1 $3
+    return
+  }
+
+  ; BbAC6 M #testchan -v+tnklo IAAAA code 123 BdAAA 1000000000
   ; <client numeric> <M|MODE> <channel> <+-modes> <arg1 arg2 arg3 arg4 etc> <timestamp>
   ; <client numeric> <M|MODE> <client nick> <:+-modes> 
   elseif ($istok(M MODE,$2,32) == $true) {
@@ -219,6 +241,7 @@ on *:sockread:mServices:{
   }
 
   ; <numeric> <GL|GLINE> * <+-user@host> <TimeRemaining> 1728501501 1728504799 <:REASON>
+  ; A2 GL * +*@1.2.3.4 3600 1739620520 1739624132 :Reason
   elseif ($istok(GL GLINE,$2,32) == $true) {
     ; TODO set\remove gline
     return
@@ -237,9 +260,15 @@ on *:sockread:mServices:{
     return
   }
 
+  ; <client numeric> <O|NOTICE> <targetclient numeric> :<message>
+  elseif ($istok(O NOTICE,$2,32) == $true) {
+    ms.servicebot.p10.privnotice $1 $3-
+    return
+  }
+
   ; <client numeric> <I|INVITE> <target nick> <target chan> <someID>
   elseif ($istok(I INVITE,$2,32) == $true) {
-    ms.servicebot.invited $1 $3 $4 $5
+    ms.servicebot.p10.invited $1 $3 $4 $5
     return
   }
 
@@ -264,7 +293,7 @@ on *:sockread:mServices:{
   }
 
   elseif ($istok(RI RPING,$2,32) == $true) {
-    ; mServices.sraw RO $3-
+    mServices.sraw RO $ms.get.server(name,$1) $4-
     return
   }
 
@@ -331,7 +360,7 @@ on *:sockread:mServices:{
 
   ; <numeric> RI|V|R <server numeric> ; This is just som misc stuff
   ; O = channotice ??
-  elseif ($istok(V R A O,$2,32) == $true) { return }
+  elseif ($istok(V R A,$2,32) == $true) { return }
 
   ; <client numeric> W|WHOIS <target srvnum> :<target nick>
   elseif ( $istok(W,$2,32) == $true ) {
