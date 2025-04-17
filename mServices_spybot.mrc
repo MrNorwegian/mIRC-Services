@@ -90,9 +90,17 @@ alias ms.spybot.report {
     ; <client numeric> <new nick>
     elseif ( $1 === NewNick ) { 
       var %spr.nn $3
-      var %spr.on $ms.get.client(oldnick,$2) $+($chr(40),$ms.get.client(ident,$2),@,$ms.get.client(host,$2),$chr(41))
-      ms.servicebot.say %ms.sb.spybot.numeric $ms.config.get(chan,spybot) User %spr.on changed nick to: %spr.nn
-      return
+      var %spr.cn $ms.get.client(oldnick,$2)
+      var %spr.sn $ms.get.server(name,$left($2,2))
+
+      ; Checking if the server or nickname is on the ignorelist
+      if ($istok($ms.config.get(ignoredserver,spybot),%spr.sn,44)) { return }
+      elseif ($istok($ms.config.get(ignorednick,spybot),%spr.cn,44)) || ($istok($ms.config.get(ignorednick,spybot),%spr.nn,44)) { return }
+      else {
+        var %spr.idhost $+($chr(40),$ms.get.client(ident,$2),@,$ms.get.client(host,$2),$chr(41))
+        ms.servicebot.say %ms.sb.spybot.numeric $ms.config.get(chan,spybot) User %spr.cn %spr.idhost changed nick to: %spr.nn
+        return
+      }
     }
 
     ; <Server numeric> <client numeric> <account accountid>
@@ -297,65 +305,72 @@ alias ms.spybot.privmsg {
     ; todo rename nickchan to something shorter
     var %ms.sp.pmsg.nickchan %ms.sb.spybot.numeric $2
 
-    ; !set spybot report ignorednicks,ignoredservers,ignoredchannels <name>
+    ; !report ignored add\rem\del\list <name>
     ; use $ms.config.write(ignorednick,nick) 
     if ( $istok(!report,%ms.sp.pmsg.cmd,32) ) { 
+      var %ms.sp.ignore.errormsg Use !report ignore
       if ( $gettok(%ms.sp.pmsg.msg,1,32) == ignore ) {
-        if ( $gettok(%ms.sp.pmsg.msg,2,32) == server ) {
-          if ( $gettok(%ms.sp.pmsg.msg,3,32) == add ) { 
-            if ( $gettok(%ms.sp.pmsg.msg,4,32) ) {
-              var %ms.sp.is.srv $v1
-              if (!$istok($ms.config.get(ignoredserver,spybot),%ms.sp.is.srv,44)) {
-                ms.config.write ignoredserver spybot $+($ms.config.get(ignoredserver,spybot),$chr(44),%ms.sp.is.srv)
-                ms.config.cache.reload spybot
-                ms.servicebot.say %ms.sp.pmsg.nickchan Server %ms.sp.is.srv added to ignorelist
+        var %ms.sp.ignore.errormsg Missing <name> - Use !report ignore list\add\remove server\chan\nick <name> 
+        if ( $istok(server servers,$gettok(%ms.sp.pmsg.msg,3,32),32) ) { var %ms.sp.ignore.arg2 ignoredserver ,%ms.sp.ignore.type Server }
+        elseif ( $istok(chan channel chans,$gettok(%ms.sp.pmsg.msg,3,32),32) ) { var %ms.sp.ignore.arg2 ignoredchan ,%ms.sp.ignore.type Channel }
+        elseif ( $istok(nick nicks,$gettok(%ms.sp.pmsg.msg,3,32),32) ) { var %ms.sp.ignore.arg2 ignorednick ,%ms.sp.ignore.type Nick }
+        else { ms.servicebot.say %ms.sp.pmsg.nickchan %ms.sp.ignore.errormsg | return }
 
-                ; Loop through all ignored servers and display them
-                var %ms.sp.is.num $numtok($ms.config.get(ignoredserver,spybot),44)
-                ms.servicebot.say %ms.sp.pmsg.nickchan Total ignored servers: %ms.sp.is.num
-                while ( %ms.sp.is.num ) {
-                  var %ms.sp.is.tsrv $gettok($ms.config.get(ignoredserver,spybot),%ms.sp.is.num,44)
-                  ms.servicebot.say %ms.sp.pmsg.nickchan Ignored server: %ms.sp.is.tsrv
-                  dec %ms.sp.is.num
-                }
+        ; Check if we are dealing with a server, channel or nick
+        if ( $gettok(%ms.sp.pmsg.msg,4,32) ) {
+          var %ms.sp.is.arg4 $v1
+          if ( $gettok(%ms.sp.pmsg.msg,2,32) == add ) { 
+            ; Check if already added
+            if (!$istok($ms.config.get(%ms.sp.ignore.arg2,spybot),%ms.sp.is.arg4,44)) {
+              ms.config.write %ms.sp.ignore.arg2 spybot $+($ms.config.get(%ms.sp.ignore.arg2,spybot),$chr(44),%ms.sp.is.arg4)
+              ms.config.cache.reload spybot
+              ms.servicebot.say %ms.sp.pmsg.nickchan %ms.sp.ignore.type %ms.sp.is.arg4 added to ignorelist.
+
+              ; Loop through all ignored servers,channels,nicks and display them
+              var %ms.sp.is.num $numtok($ms.config.get(%ms.sp.ignore.arg2,spybot),44)
+              ms.servicebot.say %ms.sp.pmsg.nickchan Total ignored $+(%ms.sp.ignore.type,:) %ms.sp.is.num
+              while ( %ms.sp.is.num ) {
+                var %ms.sp.is.targ4 $gettok($ms.config.get(%ms.sp.ignore.arg2,spybot),%ms.sp.is.num,44)
+                ms.servicebot.say %ms.sp.pmsg.nickchan Ignored $+(%ms.sp.ignore.type,:) %ms.sp.is.targ4
+                dec %ms.sp.is.num
               }
-              else { ms.servicebot.say %ms.sp.pmsg.nickchan Server %ms.sp.is.srv already in ignorelist }
             }
-            else { ms.servicebot.say %ms.sp.pmsg.nickchan Missing <servername> - Use !report ignore server list\add\remove <servername> }
+            else { ms.servicebot.say %ms.sp.pmsg.nickchan %ms.sp.ignore.type %ms.sp.is.arg4 already in ignorelist. }
           }
-          elseif ( $gettok(%ms.sp.pmsg.msg,3,32) == remove ) { 
-            if ( $gettok(%ms.sp.pmsg.msg,4,32) ) {
-              var %ms.sp.is.srv $v1
-              if ($istok($ms.config.get(ignoredserver,spybot),%ms.sp.is.srv,44)) {
-                ms.config.write ignoredserver spybot $remtok($ms.config.get(ignoredserver,spybot),%ms.sp.is.srv,44)
-                ms.config.cache.reload spybot
-                ms.servicebot.say %ms.sp.pmsg.nickchan Server %ms.sp.is.srv removed from ignorelist
+          elseif ( $istok(rem remove del delete,$gettok(%ms.sp.pmsg.msg,2,32),32) ) { 
+            ; Check if already added
+            if ($istok($ms.config.get(%ms.sp.ignore.arg2,spybot),%ms.sp.is.arg4,44)) {
+              ms.config.write %ms.sp.ignore.arg2 spybot $remtok($ms.config.get(%ms.sp.ignore.arg2,spybot),%ms.sp.is.arg4,44)
+              ms.config.cache.reload spybot
+              ms.servicebot.say %ms.sp.pmsg.nickchan %ms.sp.ignore.type %ms.sp.is.arg4 removed from ignorelist.
+
+              ; Loop through all ignored servers,channels,nicks and display them
+              var %ms.sp.is.num $numtok($ms.config.get(%ms.sp.ignore.arg2,spybot),44)
+              ms.servicebot.say %ms.sp.pmsg.nickchan Total ignored $+(%ms.sp.ignore.type:) %ms.sp.is.num
+              while ( %ms.sp.is.num ) {
+                var %ms.sp.is.targ4 $gettok($ms.config.get(%ms.sp.ignore.arg2,spybot),%ms.sp.is.num,44)
+                ms.servicebot.say %ms.sp.pmsg.nickchan Ignored $+(%ms.sp.ignore.type:) %ms.sp.is.targ4
+                dec %ms.sp.is.num
               }
-              else { ms.servicebot.say %ms.sp.pmsg.nickchan Server %ms.sp.is.srv not in ignorelist }
             }
-            else { ms.servicebot.say %ms.sp.pmsg.nickchan Missing <servername> - Use !report ignore server list\add\remove <servername> }
+            else { ms.servicebot.say %ms.sp.pmsg.nickchan %ms.sp.ignore.type %ms.sp.is.srv not in ignorelist. }
           }
-          elseif ( $gettok(%ms.sp.pmsg.msg,3,32) == list ) { 
-            var %ms.sp.is.num $numtok($ms.config.get(ignoredserver,spybot),44)
-            ms.servicebot.say %ms.sp.pmsg.nickchan Total ignored servers: %ms.sp.is.num
-            while ( %ms.sp.is.num ) {
-              var %ms.sp.is.tsrv $gettok($ms.config.get(ignoredserver,spybot),%ms.sp.is.num,44)
-              ms.servicebot.say %ms.sp.pmsg.nickchan Ignored server: %ms.sp.is.tsrv
-              dec %ms.sp.is.num
-            }
-          }
-          else { ms.servicebot.say %ms.sp.pmsg.nickchan Use !report ignore server list\add\remove <servername> }
+          else { ms.servicebot.say %ms.sp.pmsg.nickchan %ms.sp.ignore.errormsg | return }
         }
-        ; Later
-        elseif ( $gettok(%ms.sp.pmsg.msg,4,32) == channel ) { return }
-        elseif ( $gettok(%ms.sp.pmsg.msg,4,32) == nick ) { return }
-        else { ms.servicebot.say %ms.sp.pmsg.nickchan Use !report ignore server\chan\nick list\add\remove <servername\chan\nick> }
+        elseif ( $gettok(%ms.sp.pmsg.msg,2,32) == list ) { 
+          ; Loop through all ignored servers,channels,nicks and display them
+          var %ms.sp.is.num $numtok($ms.config.get(%ms.sp.ignore.arg2,spybot),44)
+          ms.servicebot.say %ms.sp.pmsg.nickchan Total ignored $+(%ms.sp.ignore.type:) %ms.sp.is.num
+          while ( %ms.sp.is.num ) {
+            var %ms.sp.is.tsrv $gettok($ms.config.get(%ms.sp.ignore.arg2,spybot),%ms.sp.is.num,44)
+            ms.servicebot.say %ms.sp.pmsg.nickchan Ignored $+(%ms.sp.ignore.type:) %ms.sp.is.tsrv
+            dec %ms.sp.is.num
+          }
+        }
+        else { ms.servicebot.say %ms.sp.pmsg.nickchan %ms.sp.ignore.errormsg }
       }
       else { ms.servicebot.say %ms.sp.pmsg.nickchan What ? }
     }
-
-
-
 
     ; Nickhistory
     if ( $istok(!nickhistory !nh,%ms.sp.pmsg.cmd,32) ) { 
