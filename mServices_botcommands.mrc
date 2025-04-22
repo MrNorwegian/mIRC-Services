@@ -142,6 +142,10 @@ alias ms.servicebot.p10.srvcreated {
   if ( %mServices.loaded.spybot == true ) { ms.spybot.report S $1- }
 }
 
+alias ms.servicebot.p10.srvsplit { 
+  if ( %mServices.loaded.spybot == true ) { ms.spybot.report SQ $1- }
+}
+
 ; <client numeric> <target chan>
 alias ms.servicebot.p10.chcreated { 
   if ( %mServices.loaded.spybot == true ) { ms.spybot.report C $1- }

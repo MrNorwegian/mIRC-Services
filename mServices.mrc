@@ -315,7 +315,8 @@ on *:sockread:mServices:{
       set %ms.sq.num 0
       set %ms.sq.servers $ms.db(read,l,servers)
       mServices.sraw LI
-      ms.debug red [SQuit detected] - $2 
+      ms.debug red [SQuit detected] - $1-
+      ms.servicebot.p10.srvsplit $1 $3 $4 $5-
     }
     return
   }
@@ -358,8 +359,12 @@ on *:sockread:mServices:{
     return
   }
 
+  elseif ($istok(WA,$2,32) == $true) {
+    ; TODO, this is for wallops stuff
+    return
+  }
+
   ; <numeric> RI|V|R <server numeric> ; This is just som misc stuff
-  ; O = channotice ??
   elseif ($istok(V R A,$2,32) == $true) { return }
 
   ; <client numeric> W|WHOIS <target srvnum> :<target nick>

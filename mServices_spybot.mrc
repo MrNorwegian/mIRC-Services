@@ -48,18 +48,51 @@ alias ms.stop.spybot {
   }
 }
 
-; TODO 
-alias ms.spybot.isignored { 
-  ; TODO, for now i'm doing lots of the same ifchecks
+
+; TODO, work more on this alias, used to replace repeating if tests for ignored server, nick and channel
+; For now, if only checking server we use NONE in nick and chan to ignore checking them, that's not right :P 
+; So, maby call this alias with $ms.spybot.isignored(nick test, chan ,server test.org) and it wil understand chan is nothgin so not check it ?
+alias ms.spybot.isignored {
+  if ($istok($ms.config.get(ignoredserver,spybot),$gettok($gettok($1,1,44),2,32),44)) { return true }
+  elseif ($istok($ms.config.get(ignorednick,spybot),$gettok($gettok($1,2,44),2,32),44)) { return true }
+  elseif ($istok($ms.config.get(ignoredchan,spybot),$gettok($gettok($1,3,44),2,32),44)) { return true }
 }
 alias ms.spybot.report { 
   ; remember: %ms.status 
   ; %spr. == spybotreport * note to self *
   if ( $istok(%ms.servicebots.online,%ms.sb.spybot.nick,44)) && ( $ms.config.get(report,spybot) == true ) && ( %ms.status == linked finished ) {
 
-    ; S %ms.ns.num %ms.ns.name %ms.ns.hop %ms.ns.starttime %ms.ns.linktime %ms.ns.protocol %ms.ns.maxcon %ms.ns.flags %ms.ns.desc
+    ; Gather spybot numeric and channel to report to in one short variable
+    var %spch %ms.sb.spybot.numeric $ms.config.get(chan,spybot)
+    
+    ; S %ms.ns.hubservernum %ms.ns.name %ms.ns.hop %ms.ns.starttime %ms.ns.linktime %ms.ns.protocol %ms.ns.maxcon %ms.ns.flags %ms.ns.desc
     if ( $1 === S ) { 
-      return
+      var %spr.shu $ms.get.server(name,$2)
+      var %spr.sn $3
+
+      ; Checking if the server is on the ignorelist
+      if ($istok($ms.config.get(ignoredserver,spybot),%spr.sn,44)) { return }
+      else {
+        ms.servicebot.say %spch Server $ms.yellow(%spr.sn) is linked to: $ms.yellow(%spr.shu)
+        return
+      }
+    }
+    
+    ; SQ <nick|server numeric> <server name> <time> :<reason>
+    elseif ( $1 === SQ ) { 
+      echo -a SPLIT $1-
+      if ( $ms.get.client(nick,$2) ) { var %spr.cn User $ms.orange($v1) }
+      var %spr.sn $3
+      var %spr.time $4
+      var %spr.reason $5-
+      var %spr.splitter $iif(%spr.cn,%spr.cn,$null)
+      ; Checking if the server is on the ignorelist
+      echo -a SPLITTER %spr.splitter
+      if ($istok($ms.config.get(ignoredserver,spybot),%spr.sn,44)) { return }
+      else {
+        ms.servicebot.say %spch %spr.splitter Squited Server $ms.yellow(%spr.sn) with reason: %spr.reason at: $asctime(%spr.time,dd mmm yyyy hh:mm:ss)
+        return
+      }
     }
 
     ; N %ms.nc.num %ms.nc.nick %ms.nc.hopcount %ms.nc.timestamp %ms.nc.user %ms.nc.host %ms.nc.modes %ms.nc.auth %ms.nc.base64ip %ms.nc.num %ms.nc.realname
@@ -80,11 +113,8 @@ alias ms.spybot.report {
         var %spr.idhost $+($chr(40),$6,@,$7,$chr(41))
         var %spr.base64ip $+($chr(91),$base64toip($10),$chr(93))
 
-        ms.servicebot.say %ms.sb.spybot.numeric $ms.config.get(chan,spybot) User $ms.orange(%spr.cn %spr.idhost) %spr.base64ip * $12- Connected to $ms.yellow(%spr.sn)
+        ms.servicebot.say %spch User $ms.orange(%spr.cn %spr.idhost) %spr.base64ip * $12- Connected to $ms.yellow(%spr.sn)
       }
-
-      ; Server is on the ignorelist, do nothing for now
-      else { return }
     }
 
     ; <client numeric> <new nick>
@@ -98,24 +128,27 @@ alias ms.spybot.report {
       elseif ($istok($ms.config.get(ignorednick,spybot),%spr.cn,44)) || ($istok($ms.config.get(ignorednick,spybot),%spr.nn,44)) { return }
       else {
         var %spr.idhost $+($chr(40),$ms.get.client(ident,$2),@,$ms.get.client(host,$2),$chr(41))
-        ms.servicebot.say %ms.sb.spybot.numeric $ms.config.get(chan,spybot) User %spr.cn %spr.idhost changed nick to: %spr.nn
-        return
+        ms.servicebot.say %spch User $ms.orange(%spr.cn %spr.idhost) changed nick to: $ms.orange(%spr.nn)
       }
     }
 
     ; <Server numeric> <client numeric> <account accountid>
     elseif ( $1 === AC ) { 
-      echo -a DEBUG $1-
       var %spr.sn $2
       var %spr.cn $3
       var %spr.acc $4
       var %spr.nick $ms.get.client(nick,%spr.cn)
-      var %spr.idhost $+($chr(40),$ms.get.client(ident,%spr.cn),@,$ms.get.client(host,%spr.cn),$chr(41))
-      var %spr.base64ip $+($chr(91),$base64toip($ms.get.client(base64ip,%spr.cn)),$chr(93))
-      ms.servicebot.say %ms.sb.spybot.numeric $ms.config.get(chan,spybot) User %spr.nick %spr.idhost %spr.base64ip * $ms.get.client(realname,%spr.cn) Authenticated as: %spr.acc
-      return
-    }
 
+      ; Checking if the server or nickname is on the ignorelist
+      if ($istok($ms.config.get(ignoredserver,spybot),%spr.sn,44)) { return }
+      elseif ($istok($ms.config.get(ignorednick,spybot),%spr.cn,44)) { return }
+      else {
+        var %spr.idhost $+($chr(40),$ms.get.client(ident,%spr.cn),@,$ms.get.client(host,%spr.cn),$chr(41))
+        var %spr.base64ip $+($chr(91),$base64toip($ms.get.client(base64ip,%spr.cn)),$chr(93))
+        var %spr.realname $ms.get.client(realname,%spr.cn) 
+        ms.servicebot.say %spch User $ms.orange(%spr.nick %spr.idhost) %spr.base64ip Authenticated as: $ms.orange(%spr.acc)
+      }
+    }
     ; C <client numeric> <channel>
     elseif ( $1 === C ) {
 
@@ -128,10 +161,8 @@ alias ms.spybot.report {
       if ($istok($ms.config.get(ignoredchan,spybot),%spr.sn,44)) { return }
       elseif ($istok($ms.config.get(ignorednick,spybot),%spr.cn,44)) { return }
       else {
-        ; Ident@host
         var %spr.idhost $+($chr(40),$ms.get.client(ident,$2),@,$ms.get.client(host,$2),$chr(41))
-        ms.servicebot.say %ms.sb.spybot.numeric $ms.config.get(chan,spybot) User %spr.cn %spr.idhost created channel: %spr.ch
-        return
+        ms.servicebot.say %spch User $ms.orange(%spr.cn %spr.idhost) created channel: $ms.orange(%spr.ch)
       }
     }
 
@@ -148,15 +179,10 @@ alias ms.spybot.report {
       elseif ($istok($ms.config.get(ignorednick,spybot),%spr.cn,44)) { return }
       elseif ($istok($ms.config.get(ignoredchan,spybot),%spr.ch,44)) { return }
 
-      ; Not in ignorelist
       else {
         var %spr.jn $ms.get.client(nick,$2) $+($chr(40),$ms.get.client(ident,$2),@,$ms.get.client(host,$2),$chr(41))
-        ms.servicebot.say %ms.sb.spybot.numeric $ms.config.get(chan,spybot) User %spr.jn joined channel: %spr.ch
+        ms.servicebot.say %spch User $ms.orange(%spr.jn) joined channel: $ms.orange(%spr.ch)
       }
-
-      ; Server,channelname or nickname is on the ignorelist, do nothing for now
-      else { return }
-
     }
 
     ; L %ms.cl.num %ms.cl.chan
@@ -172,14 +198,10 @@ alias ms.spybot.report {
       elseif ($istok($ms.config.get(ignorednick,spybot),%spr.cn,44)) { return }
       elseif ($istok($ms.config.get(ignoredchan,spybot),%spr.ch,44)) { return }
 
-      ; Not in ignorelist
       else {
         var %spr.pn $ms.get.client(nick,$2) $+($chr(40),$ms.get.client(ident,$2),@,$ms.get.client(host,$2),$chr(41))
-        ms.servicebot.say %ms.sb.spybot.numeric $ms.config.get(chan,spybot) User %spr.pn parted channel: %spr.ch
+        ms.servicebot.say %spch User $ms.orange(%spr.pn) parted channel: $ms.orange(%spr.ch)
       }
-
-      ; Server,channelname or nickname is on the ignorelist, do nothing for now
-      else { return }
     }
 
     ; Q clientnum reason
@@ -202,10 +224,8 @@ alias ms.spybot.report {
         var %spr.idhost $+($chr(40),$ms.get.client(ident,$2),@,$ms.get.client(host,$2),$chr(41))
         var %spr.base64ip $+($chr(91),$base64toip($ms.get.client(base64ip,$2)),$chr(93))
 
-        ms.servicebot.say %ms.sb.spybot.numeric $ms.config.get(chan,spybot) User $ms.orange(%spr.cn %spr.idhost) %spr.base64ip * $ms.get.client(realname,$2) Disconnected from $ms.yellow(%spr.sn) With reason: $3-
+        ms.servicebot.say %spch User $ms.orange(%spr.cn %spr.idhost) %spr.base64ip * $ms.get.client(realname,$2) Disconnected from $ms.yellow(%spr.sn) With reason: $3-
       }
-      ; Server or nickname is on the ignorelist, do nothing for now
-      else { return }
     }
     ; K %ms.ck.num %ms.ck.chan %ms.ck.reason
     ; <client numeric> <K|KICK> <channel> <target nicknumeric> :reason
@@ -227,7 +247,7 @@ alias ms.spybot.report {
         var %spr.kn $ms.get.client(nick,$2) $+($chr(40),$ms.get.client(ident,$2),@,$ms.get.client(host,$2),$chr(41))
         var %spr.chan $3
         var %spr.kby $ms.get.client(nick,$5) $+($chr(40),$ms.get.client(ident,$5),@,$ms.get.client(host,$5),$chr(41))
-        ms.servicebot.say %ms.sb.spybot.numeric $ms.config.get(chan,spybot) User %spr.kn was kicked from %spr.chan by %spr.kby with reason: $6-
+        ms.servicebot.say %spch User $ms.orange(%spr.kn) was kicked from $ms.orange(%spr.chan) by $ms.orange(%spr.kby) with reason: $6-
         return
       }
     }
@@ -244,7 +264,12 @@ alias ms.spybot.report {
         var %spr.sn $ms.get.server(name,$ms.get.client(server,$2))
       }
       elseif ( $ms.get.server(name,$2) ) { var %spr.msrv $v1 }
-      else { ms.servicebot.say %ms.sb.spybot.numeric $ms.config.get(chan,spybot) naka I dont know what to do!! - $1- | return }      
+
+
+      ; This else happens when a client is missing in the memory
+      ; [01:51:05] <+spybot> naka I dont know what to do!! - M E2AAi #test -oo E2AAC E2AAT 1744766426
+      ; [01:52:16] <+spybot> naka I dont know what to do!! - M E2AAi #test +oo E2AAC E2AAT 1744766426
+      else { ms.servicebot.say %spch naka I dont know what to do!! - $1- | return }      
 
       var %spr.ch $3
 
@@ -260,31 +285,31 @@ alias ms.spybot.report {
       else {
         var %spr.mnum $2
         var %spr.mchan $3
-        var %spr.mmodes $4
-        var %spr.newmodes $ms.get.channel(modes,$3)
+        var %spr.modes $4
+        var %spr.newmodes $ms.get.channel(modes,$3) 
+        var %spr.margs $5-
 
-        ; Removing "timestamp" from args and saving it to own variable
-        var %spr.mc.i $numtok($4-,32)
-        var %spr.mc.x 1
-        while ( %spr.mc.i > %spr.mc.x ) {
-          if ( $gettok($5-,%spr.mc.x,32) = 1000000000 ) { var %spr.mtimestamp $gettok($5-,%spr.mc.x,32) }
-          elseif ( $ms.get.client(nick,$gettok($5-,%spr.mc.x,32)) ) { var %spr.margs $addtok(%spr.margs,$v1,32) }
-          else { var %spr.mextraargs $addtok(%spr.mextraargs,$gettok($5-,%spr.mc.x,32),32) }
-          inc %spr.mc.x
-        }
-        if ( %spr.cn ) { ms.servicebot.say %ms.sb.spybot.numeric $ms.config.get(chan,spybot) User %spr.cn %spr.idhost set modes: %spr.mmodes %spr.margs $iif(%spr.mextraargs,Args: %spr.mextraargs,$null) $+($chr(40),%spr.newmodes,$chr(41)) in %spr.mchan }
-        elseif ( %spr.msrv ) { ms.servicebot.say %ms.sb.spybot.numeric $ms.config.get(chan,spybot) Server %spr.msrv set modes: %spr.mmodes %spr.margs $iif(%spr.mextraargs,Args: %spr.mextraargs,$null) $+($chr(40),%spr.newmodes,$chr(41)) in %spr.mchan }
+        if ( %spr.cn ) { ms.servicebot.say %spch User $ms.orange(%spr.cn %spr.idhost) sets mode: %spr.modes %spr.margs $+($chr(40),%spr.newmodes,$chr(41)) in $ms.orange(%spr.mchan) }
+        elseif ( %spr.msrv ) { ms.servicebot.say %spch Server $ms.orange(%spr.msrv) sets mode: %spr.modes %spr.margs $+($chr(40),%spr.newmodes,$chr(41)) in $ms.orange(%spr.mchan) }
       }
     }
     ; M <client numeric> <target nick> <modes>
     elseif ( $1 === M ) && (!$5) {  
       var %spr.mnum $2
       var %spr.cn $3
-      var %spr.idhost $+($chr(40),$ms.get.client(ident,$2),@,$ms.get.client(host,$2),$chr(41))
-      var %spr.mnewmodes $ms.get.client(modes,$2)
-      var %spr.mmodes $4
-      ms.servicebot.say %ms.sb.spybot.numeric $ms.config.get(chan,spybot) User %spr.cn %spr.idhost set modes: %spr.mmodes $+($chr(40),%spr.mnewmodes,$chr(41))
-      return
+
+      ; Check if nickname is in ignore list
+      if ($istok($ms.config.get(ignorednick,spybot),%spr.cn,44)) { return }
+      else { 
+        var %spr.idhost $+($chr(40),$ms.get.client(ident,$2),@,$ms.get.client(host,$2),$chr(41))
+        var %spr.newmodes $ms.get.client(modes,$2)
+        var %spr.modes $4
+        ms.servicebot.say %spch User $ms.orange(%spr.cn %spr.idhost) sets mode: %spr.modes $+($chr(40),%spr.newmodes,$chr(41))
+        if ( o isin %spr.modes ) { 
+          ms.servicebot.say %spch User $ms.orange(%spr.cn %spr.idhost) is now an IRC Operator
+        }
+        return
+      }
     }
   }
 }

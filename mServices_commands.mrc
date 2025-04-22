@@ -159,7 +159,7 @@ alias ms.account {
   return
 }
 
-; leaf <server numeric> S <server name> <hop count> <start time> <link time> <protocol> <server numeric(2)+maxconn(3)> [+flags] :<desc>
+; leaf <hubserver numeric> S <server name> <hop count> <start time> <link time> <protocol> <server numeric(2)+maxconn(3)> [+flags] :<desc>
 ; myhub SERVER <server name> <hop count> <start time> <link time> <protocol> <server numeric(2)+maxconn(3)> [+flags] :<desc>
 alias ms.newserver {
   if ( $1 === SERVER ) { 
@@ -177,7 +177,7 @@ alias ms.newserver {
     set %ms.myhubname %ms.ns.name
   }
   elseif ( $2 === S ) { 
-    var %ms.ns.servernumeric $1
+    var %ms.ns.hubservernum $1
     var %ms.ns.name $3
     var %ms.ns.hop $4
     var %ms.ns.starttime $iif($5 === 0,$5,NULL)
@@ -203,8 +203,7 @@ alias ms.newserver {
   ; Is the server already in the database? whops that shouldnt happen :(
   if (!$istok($ms.db(read,l,servers),%ms.ns.num,44)) { ms.db write l servers $addtok($ms.db(read,l,servers),%ms.ns.num,44) }
 
-  ; TODO: Move this to ms.servicebot.p10.srvcreated ?
-  if ( %ms.spybot.report == true ) { ms.spybot.report S %ms.ns.num %ms.ns.name %ms.ns.hop %ms.ns.starttime %ms.ns.linktime %ms.ns.protocol %ms.ns.maxcon %ms.ns.flags %ms.ns.desc }
+  if ( %ms.spybot.report == true ) { ms.servicebot.p10.srvcreated %ms.ns.hubservernum %ms.ns.name %ms.ns.hop %ms.ns.starttime %ms.ns.linktime %ms.ns.protocol %ms.ns.maxcon %ms.ns.flags %ms.ns.desc }
   return
 }
 
@@ -403,7 +402,7 @@ alias ms.client.quit {
   return
 }
 
-; <client numeric> <M|MODE> <channel> <+-modes> <arg1 arg2 arg3 arg4 etc> <timestamp?>
+; <client numeric> <channel> <+-modes> <arg1 arg2 arg3 arg4 etc> <timestamp>
 alias ms.mode.channel { 
   var %ms.mc.num $1
   var %ms.mc.chan $2
@@ -420,46 +419,82 @@ alias ms.mode.channel {
 ; BdAAA #testchan +o IAAAX 1000000000
 ; BdAAA #testchan +b test!test@test.lame 1000000000
 ; BdAAA #testchan -mb+lo test!test@test.lame 123 BbAAC 1000000000
-; <client numeric> <channel> <+-modes> <arg1 arg2 arg3 arg4 etc> <timestamp>
+; modes <client numeric> <channel> <+-modes> <arg1 arg2 arg3 arg4 etc> <timestamp?>
 alias ms.change.channel {
   if ( $1 == modes ) {
     if ($4) {
-      var %ms.cc.data $ms.db(read,ch,$3)
+
       var %ms.cc.num $2
       var %ms.cc.chan $3
       var %ms.cc.modes $4
+      var %ms.cc.args $5-
+      var %nextarg 1
 
-      var %ms.cc.oldmode $ms.get.channel(mode,%ms.cc.chan)
-      var %ms.cc.mode.new $ms.get.channel(mode,%ms.cc.chan)
+      var %ms.cc.data $ms.db(read,ch,%ms.cc.chan)
+ 
+      var %ms.cc.oldmode $ms.get.channel(modes,%ms.cc.chan)
+      var %ms.cc.mode.new $ms.get.channel(modes,%ms.cc.chan)
       var %i 1
       var %len $len(%ms.cc.modes)
+
+      echo -a Old Data: %ms.cc.data
       while (%i <= %len) {
+
+        ; Pick next char
         var %char $mid(%ms.cc.modes,%i,1)
+
+        ; Check if next mode is + or - and set action
         if (%char == +) { var %action add }
         elseif (%char == -) { var %action remove }
-        echo -a Action: %action Char %char Modes %ms.cc.modes
 
-        ; TODO
-        ; Check if +ov or +b
-        if (%action == add) { 
-          if ( %ms.cc.oldmode == NONE ) { var %ms.cc.mode.new $+(+,%char) }
-          else { var %ms.cc.mode.new $+(%ms.cc.mode.new,%char) }
+        ; TODO Sometime, get modes supported from linked server somehow
+        if ( %char isincs imnpstrDdRcCMPkl ) { 
+          if (%action == add) { 
+            ; Check if channel does not have any modes set, else add more modes
+            if ( %ms.cc.oldmode == NONE ) { var %ms.cc.mode.new $+(+,%char) }
+            else { var %ms.cc.mode.new $+(%ms.cc.mode.new,%char) }
+          }
+          elseif (%action == remove) { 
+            if ( $len(%ms.cc.mode.new) <= 2 ) { var %ms.cc.mode.new NONE }
+            else { var %ms.cc.mode.new $remove(%ms.cc.mode.new,%char) }
+          }
         }
-        elseif (%action == remove) { 
-          if ( $len(%ms.cc.mode.new) <= 2 ) { var %ms.cc.mode.new NONE }
-          else { var %ms.cc.mode.new $remove(%ms.cc.mode.new,%char,32) }
+        if ( %char === k ) {
+          var %ms.cc.mode.newkey $iif(%action == add,$gettok(%ms.cc.args,%nextarg,32),NONE)
+          inc %nextarg
+        }
+        if ( %char === l ) {
+          ; Check if limit is set, ONLY then inc %nextarg, this is because -l doesnt have an arg
+          if ( %action == add ) { var %ms.cc.mode.newlimit $gettok(%ms.cc.args,%nextarg,32) | inc %nextarg }
+          elseif ( %action == remove ) { var %ms.cc.mode.newlimit NONE }
+        }
+
+        if ( %char === b ) {
+
+          ; This one needs work, need to check if ban exist just to be sure, AND for now multple bans are not supported
+          var %ms.cc.mode.newbans $iif(%action == add,$gettok(%ms.cc.args,%nextarg,32),NONE)
+          inc %nextarg
+        }
+        ; ov we can check if nick exist, just to be sure
+        if ( %char === o ) {
+          inc %nextarg
+          ; TODO update ops for client
+        }
+        if ( %char === v ) {
+          inc %nextarg
+          ; TODO update voices for client
         }
         inc %i
       }
-      echo DATA %ms.cc.data
-      ; ms.db write ch %ms.cc.chan $puttok(%ms.cc.data,chanmodes %ms.cc.mode.new,2,44)
-      ; if +k isin $3
-      if ( k isin $3 ) { 
-        var %ms.cc.key $4
-      }
-      elseif ( l isin $3 ) { 
-        var %ms.cc.limit $4
-      }
+      var %ms.cc.mode.ts $gettok(%ms.cc.args,%nextarg,32)
+      
+      ; Save key,limit,bans to the database
+      if ( %ms.cc.mode.newkey ) { var %ms.cc.data $puttok(%ms.cc.data,chankey %ms.cc.mode.newkey,4,44) }
+      if ( %ms.cc.mode.newlimit ) { var %ms.cc.data $puttok(%ms.cc.data,chanlimit %ms.cc.mode.newlimit,3,44) }
+      if ( %ms.cc.mode.newbans ) { var %ms.cc.data $puttok(%ms.cc.data,bans %ms.cc.mode.newbans,5,44) }
+
+      ; Finally write the new modes to the database
+      ms.db write ch %ms.cc.chan $puttok(%ms.cc.data,chanmodes %ms.cc.mode.new,2,44)
       var %ms.cc.args $4
       var %ms.cc.timestamp $5
       return
