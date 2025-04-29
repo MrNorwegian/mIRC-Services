@@ -134,25 +134,27 @@ alias ms.spybot.report {
 
     ; <Server numeric> <client numeric> <account accountid>
     elseif ( $1 === AC ) { 
+
+      ; Setting variable for servername, nick, channel
       var %spr.sn $2
-      var %spr.cn $3
+      var %spr.cnum $3
       var %spr.acc $4
-      var %spr.nick $ms.get.client(nick,%spr.cn)
+      var %spr.cn $ms.get.client(nick,%spr.cnum)
 
       ; Checking if the server or nickname is on the ignorelist
       if ($istok($ms.config.get(ignoredserver,spybot),%spr.sn,44)) { return }
       elseif ($istok($ms.config.get(ignorednick,spybot),%spr.cn,44)) { return }
       else {
-        var %spr.idhost $+($chr(40),$ms.get.client(ident,%spr.cn),@,$ms.get.client(host,%spr.cn),$chr(41))
-        var %spr.base64ip $+($chr(91),$base64toip($ms.get.client(base64ip,%spr.cn)),$chr(93))
-        var %spr.realname $ms.get.client(realname,%spr.cn) 
-        ms.servicebot.say %spch User $ms.orange(%spr.nick %spr.idhost) %spr.base64ip Authenticated as: $ms.orange(%spr.acc)
+        var %spr.idhost $+($chr(40),$ms.get.client(ident,%spr.cnum),@,$ms.get.client(host,%spr.cnum),$chr(41))
+        var %spr.base64ip $+($chr(91),$base64toip($ms.get.client(base64ip,%spr.cnum)),$chr(93))
+        var %spr.realname $ms.get.client(realname,%spr.cnum) 
+        ms.servicebot.say %spch User $ms.orange(%spr.cn %spr.idhost) %spr.base64ip Authenticated as: $ms.orange(%spr.acc)
       }
     }
     ; C <client numeric> <channel>
     elseif ( $1 === C ) {
 
-      ; Setting variable for servername, nick, channel $gettok($gettok($ms.db(read,s,$2),1,44),2,32)
+      ; Setting variable for servername, nick, channel
       var %spr.cn $ms.get.client(nick,$2)
       var %spr.sn $ms.get.server(name,$left($2,2))
       var %spr.ch $3
@@ -160,6 +162,7 @@ alias ms.spybot.report {
       ; Checking if the server or nickname is on the ignorelist
       if ($istok($ms.config.get(ignoredchan,spybot),%spr.sn,44)) { return }
       elseif ($istok($ms.config.get(ignorednick,spybot),%spr.cn,44)) { return }
+
       else {
         var %spr.idhost $+($chr(40),$ms.get.client(ident,$2),@,$ms.get.client(host,$2),$chr(41))
         ms.servicebot.say %spch User $ms.orange(%spr.cn %spr.idhost) created channel: $ms.orange(%spr.ch)
@@ -215,7 +218,6 @@ alias ms.spybot.report {
       if ($istok($ms.config.get(ignoredserver,spybot),%spr.sn,44)) { return }
       elseif ($istok($ms.config.get(ignorednick,spybot),%spr.cn,44)) { return }
 
-      ; Not in ignorelist
       else {
         ; Reusing %spr.sn to add some ()
         var %spr.sn $+($chr(91),%spr.sn,$chr(93)) 
@@ -252,12 +254,12 @@ alias ms.spybot.report {
       }
     }
 
+    ; Client or server setting modes in channel
     ; M <client numeric> <channel> <+-modes> <arg1 arg2 arg3 arg4 etc> <timestamp>
-    elseif ( $1 === M ) && ($5) {
+    elseif (($1 === M) && ($5)) || (($1 === OM) && ($5)) {
 
-      ; Setting variable for servername, nick, channel
-      ; ms.servicebot.say %ms.sb.spybot.numeric $ms.config.get(chan,spybot) $2 ison $ms.get.client(server,$2) num: $ms.get.server(name,$ms.get.client(server,$2))
-
+      ; Checking if numeric is nick, else its a server setting modes
+      var %spr.ch $3
       if ( $ms.get.client(nick,$2) ) { 
         var %spr.cn $v1
         var %spr.idhost $+($chr(40),$ms.get.client(ident,$2),@,$ms.get.client(host,$2),$chr(41))
@@ -265,13 +267,9 @@ alias ms.spybot.report {
       }
       elseif ( $ms.get.server(name,$2) ) { var %spr.msrv $v1 }
 
-
-      ; This else happens when a client is missing in the memory
+      ; This else happens when a client is missing in the memory, need to fix this
       ; [01:51:05] <+spybot> naka I dont know what to do!! - M E2AAi #test -oo E2AAC E2AAT 1744766426
-      ; [01:52:16] <+spybot> naka I dont know what to do!! - M E2AAi #test +oo E2AAC E2AAT 1744766426
       else { ms.servicebot.say %spch naka I dont know what to do!! - $1- | return }      
-
-      var %spr.ch $3
 
       ; Checking if the servername, nickname or channelname is on the ignorelist
       if ($istok($ms.config.get(ignoredserver,spybot),%spr.sn,44)) { return }
@@ -281,21 +279,30 @@ alias ms.spybot.report {
       ; Extra check for checking servername setting mode
       elseif ($istok($ms.config.get(ignoredserver,spybot),%spr.msrv,44)) { return }
 
-      ; Not in ignorelist
       else {
-        var %spr.mnum $2
         var %spr.mchan $3
         var %spr.modes $4
         var %spr.newmodes $ms.get.channel(modes,$3) 
-        var %spr.margs $5-
+        var %spr.margs $remove($5-,1000000000,$ms.get.channel(createtime,%spr.mchan))
 
-        if ( %spr.cn ) { ms.servicebot.say %spch User $ms.orange(%spr.cn %spr.idhost) sets mode: %spr.modes %spr.margs $+($chr(40),%spr.newmodes,$chr(41)) in $ms.orange(%spr.mchan) }
-        elseif ( %spr.msrv ) { ms.servicebot.say %spch Server $ms.orange(%spr.msrv) sets mode: %spr.modes %spr.margs $+($chr(40),%spr.newmodes,$chr(41)) in $ms.orange(%spr.mchan) }
+        var %a $numtok(%spr.margs,32), %n 1
+        while ( %n <= %a ) {
+          if ( $ms.get.client(nick,$gettok(%spr.margs,%n,32)) ) { var %spr.newmargs $addtok(%spr.newmargs,$v1,32) }
+          else { var %spr.newmargs $addtok(%spr.newmargs,$gettok(%spr.margs,%n,32),32) }
+          inc %n
+        }
+
+        ; Check if it's a client setting modes
+        if ( %spr.cn ) { ms.servicebot.say %spch User $ms.orange(%spr.cn %spr.idhost) sets mode: %spr.modes %spr.newmargs $+($chr(40),%spr.newmodes,$chr(41)) in $ms.orange(%spr.mchan) }
+
+        ; Elseif server setting modes
+        elseif ( %spr.msrv ) { ms.servicebot.say %spch Server $ms.orange(%spr.msrv) sets mode: %spr.modes %spr.newmargs $+($chr(40),%spr.newmodes,$chr(41)) in $ms.orange(%spr.mchan) }
       }
     }
+
+    ; Client setting usermodes
     ; M <client numeric> <target nick> <modes>
-    elseif ( $1 === M ) && (!$5) {  
-      var %spr.mnum $2
+    elseif ( $1 === CM ) {  
       var %spr.cn $3
 
       ; Check if nickname is in ignore list
@@ -305,11 +312,14 @@ alias ms.spybot.report {
         var %spr.newmodes $ms.get.client(modes,$2)
         var %spr.modes $4
         ms.servicebot.say %spch User $ms.orange(%spr.cn %spr.idhost) sets mode: %spr.modes $+($chr(40),%spr.newmodes,$chr(41))
+
+        ; Did an user oper up ?
         if ( o isin %spr.modes ) { 
           ms.servicebot.say %spch User $ms.orange(%spr.cn %spr.idhost) is now an IRC Operator
         }
         return
       }
+    }
     }
   }
 }
