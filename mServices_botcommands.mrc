@@ -127,6 +127,11 @@ alias ms.servicebot.p10.Newclient {
   if ( %mServices.loaded.spybot == true ) { ms.spybot.report N $1- }
 }
 
+; Quit
+alias ms.servicebot.p10.quit { 
+  if ( %mServices.loaded.spybot == true ) { ms.spybot.report Q $1- }
+}
+
 ; <client numeric> <new nick>
 alias ms.servicebot.p10.nick { 
   if ( %mServices.loaded.spybot == true ) { ms.spybot.report NewNick $1- }
@@ -171,12 +176,17 @@ alias ms.servicebot.p10.invited {
 
 ; <client numeric> <target client numeric> <modes>
 alias ms.servicebot.p10.clientmode { 
+  if ( %mServices.loaded.spybot == true ) { ms.spybot.report CM $1- }
+}
+
+; <client numeric> <channel> <+-modes> <arg1 arg2 arg3 arg4 etc> <timestamp>
+alias ms.servicebot.p10.chanmode { 
   if ( %mServices.loaded.spybot == true ) { ms.spybot.report M $1- }
 }
 
-; <client numeric> <target client numeric> <modes> <nick1 nick2 etc> <timestamp>
-alias ms.servicebot.p10.chanmode { 
-  if ( %mServices.loaded.spybot == true ) { ms.spybot.report M $1- }
+; <client numeric> <channel> <+-modes> <arg1 arg2 arg3 arg4 etc> <fake timestamp(0)>
+alias ms.servicebot.p10.opmode { 
+  if ( %mServices.loaded.spybot == true ) { ms.spybot.report OM $1- }
 }
 
 ; <client numeric> <targetchan\targetclient numeric> :<message>
