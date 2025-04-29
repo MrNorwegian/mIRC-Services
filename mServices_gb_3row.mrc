@@ -1,3 +1,4 @@
+@ -1,186 +0,0 @@
 alias b {
   if ( *c* iswm $chan($chan).mode ) { return $1 }
   else { return $+($chr(2),$1-,$chr(2)) }

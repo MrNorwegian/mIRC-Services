@@ -431,7 +431,7 @@ alias ms.change.channel {
       var %nextarg 1
 
       var %ms.cc.data $ms.db(read,ch,%ms.cc.chan)
- 
+
       var %ms.cc.oldmode $ms.get.channel(modes,%ms.cc.chan)
       var %ms.cc.mode.new $ms.get.channel(modes,%ms.cc.chan)
       var %i 1
@@ -487,7 +487,7 @@ alias ms.change.channel {
         inc %i
       }
       var %ms.cc.mode.ts $gettok(%ms.cc.args,%nextarg,32)
-      
+
       ; Save key,limit,bans to the database
       if ( %ms.cc.mode.newkey ) { var %ms.cc.data $puttok(%ms.cc.data,chankey %ms.cc.mode.newkey,4,44) }
       if ( %ms.cc.mode.newlimit ) { var %ms.cc.data $puttok(%ms.cc.data,chanlimit %ms.cc.mode.newlimit,3,44) }
