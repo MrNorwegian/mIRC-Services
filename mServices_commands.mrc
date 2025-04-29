@@ -14,10 +14,7 @@ alias mServices.sraw {
   if ($sock(mServices) != $null) { 
     sockwrite -nt mServices $inttobase64($mServices.config(numeric),2) $1-
     if ( $mServices.config(rawdebug) == true ) { 
-        ; Just for debugging into console and #debug channel 
-      if ( %mServices.ignore.PINGPONG == true ) { 
-        if ( $istok(Z RO,$1,32) != $true ) { ms.debug orange [Sockwrite Server] <-- $inttobase64($mServices.config(numeric),2) $1- }
-      }
+      ms.debug orange [Sockwrite Server] <-- $inttobase64($mServices.config(numeric),2) $1-
     }
   }
   else { ms.debug red [Sockwrite Server] <-- Server is not running | return }
@@ -45,7 +42,7 @@ alias mServices.stop {
 }
 
 ; Not that debug, this is echo debug in console and #debug channel if spybot is enabled
-alias ms.debug {
+alias ms.debug { 
   if ( $mServices.config(rawdebug) == true ) { ms.echo $1 $2- }
   if ( %mServices.loaded.spybot ) { ms.spybot.debug $2- }
 }
@@ -87,7 +84,7 @@ alias ms.lightgrey { return 15 $+ $1- $+  }
 
 
 ; <server numeric> <N|NICK> <nick> <hop count> <timestamp> <user> <host> [<modes> [auth if +r]] <base64 ip> <clientnumeric> :<real name>
-; <nick numeric> <N|NICK> <newnick> <timestamp>
+; <nick numeric> <N|NICK> <newnick> <timestamp> ; nick change
 alias ms.newclient {
   if ( $5 ) { 
     var %ms.nc.srvnum $1
@@ -118,31 +115,27 @@ alias ms.newclient {
       var %ms.nc.num $9
       var %ms.nc.realname $mid($10-,2,99)
     }
-    ; Build up the client line for the database
-    var %ms.nc.client $+(srvnum %ms.nc.srvnum,$chr(44))
-    var %ms.nc.client $+(%ms.nc.client,nick %ms.nc.nick,$chr(44))
-    var %ms.nc.client $+(%ms.nc.client,hopcount %ms.nc.hopcount,$chr(44))
-    var %ms.nc.client $+(%ms.nc.client,timestamp %ms.nc.timestamp,$chr(44))
-    var %ms.nc.client $+(%ms.nc.client,user %ms.nc.user,$chr(44))
-    var %ms.nc.client $+(%ms.nc.client,host %ms.nc.host,$chr(44))
-    var %ms.nc.client $+(%ms.nc.client,modes %ms.nc.modes,$chr(44))
-    var %ms.nc.client $+(%ms.nc.client,auth %ms.nc.auth,$chr(44))
-    var %ms.nc.client $+(%ms.nc.client,base64ip %ms.nc.base64ip,$chr(44))
-    var %ms.nc.client $+(%ms.nc.client,realname %ms.nc.realname,$chr(44))
+    ms.db write c %ms.nc.num srvnum %ms.nc.srvnum
+    ms.db write c %ms.nc.num $addtok($ms.db(read,c,%ms.nc.num),nick %ms.nc.nick,44)
+    ms.db write c %ms.nc.num $addtok($ms.db(read,c,%ms.nc.num),hopcount %ms.nc.hopcount,44)
+    ms.db write c %ms.nc.num $addtok($ms.db(read,c,%ms.nc.num),timestamp %ms.nc.timestamp,44)
+    ms.db write c %ms.nc.num $addtok($ms.db(read,c,%ms.nc.num),user %ms.nc.user,44)
+    ms.db write c %ms.nc.num $addtok($ms.db(read,c,%ms.nc.num),host %ms.nc.host,44)
+    ms.db write c %ms.nc.num $addtok($ms.db(read,c,%ms.nc.num),modes %ms.nc.modes,44)
+    ms.db write c %ms.nc.num $addtok($ms.db(read,c,%ms.nc.num),auth %ms.nc.auth,44)
+    ms.db write c %ms.nc.num $addtok($ms.db(read,c,%ms.nc.num),base64ip %ms.nc.base64ip,44)
+    ms.db write c %ms.nc.num $addtok($ms.db(read,c,%ms.nc.num),realname %ms.nc.realname,44)
 
-    ms.db write c %ms.nc.num %ms.nc.client
     ms.db write nh %ms.nc.num %ms.nc.nick %ms.nc.timestamp
 
-    ; Add the client to server's list of clients
+    ; note the clients to it's server, not that important but might be useful
+    ; AND this is bugy, max 5500 clients due to max line length in .ini files (dunno in hash)
+    ; use $numtok and make list2, list3 etc, or abondon this idea and use $hget() instead to get number of clients (does not work with ini db)
     if (!$istok($ms.db(read,l,%ms.nc.srvnum),%ms.nc.num,44)) { 
       ms.db write l %ms.nc.srvnum $addtok($ms.db(read,l,%ms.nc.srvnum),%ms.nc.num,44)
     }
-    ms.servicebot.p10.Newclient %ms.nc.srvnum %ms.nc.nick %ms.nc.hopcount %ms.nc.timestamp %ms.nc.user %ms.nc.host %ms.nc.modes %ms.nc.auth %ms.nc.base64ip %ms.nc.num %ms.nc.realname
-    ms.echo blue [IAL DB] Client %ms.nc.num connected to server %ms.nc.srvnum as %ms.nc.nick
+    if ( %ms.spybot.report == true ) { ms.spybot.report N %ms.nc.srvnum %ms.nc.nick %ms.nc.hopcount %ms.nc.timestamp %ms.nc.user %ms.nc.host %ms.nc.modes %ms.nc.auth %ms.nc.base64ip %ms.nc.num %ms.nc.realname }
   }
-
-  ; Handle nickchange
-  ; <nick numeric> <N|NICK> <newnick> <timestamp>
   elseif ( $ms.db(read,c,$1,nick) ) {
     var %ms.nc.num $1
     var %ms.nc.newnick $3
@@ -150,7 +143,8 @@ alias ms.newclient {
     ms.change.client nick %ms.nc.num %ms.nc.newnick
     ms.db write nh %ms.nc.num $addtok($ms.db(read,nh,%ms.nc.num),$+($ms.get.client(nick,%ms.nc.num) %ms.nc.timestamp),44)
     ms.servicebot.p10.nick %ms.nc.num %ms.nc.newnick 
-    ms.echo blue [IAL DB] Client %ms.nc.num changed nick to %ms.nc.newnick
+    ; ms.db write c %ms.nc.num $reptok($ms.db(read,c,%ms.nc.num),$gettok($ms.db(read,c,%ms.nc.num),2,44),nick %ms.nc.newnick,44)
+    ; ms.db write c %ms.nc.num $reptok($ms.db(read,c,%ms.nc.num),$gettok($ms.db(read,c,%ms.nc.num),4,44),timestamp %ms.nc.timestamp,44)
   }
   return
 }
@@ -378,51 +372,33 @@ alias ms.client.part {
   return
 }
 
-; <client numeric> :<reason>
-; <client numeric> noquit
 alias ms.client.quit { 
-  if ( $ms.get.client(nick,$1) ) {
-    var %ms.cq.num $1
-    ; Check if we client is on any chans and part them 
-    if ( $ms.db(read,l,%ms.cq.num) ) { var %ms.cq.chans $v1 }
-      if ( %ms.cq.chans ) {
-      ; when join 0 the client is not quiting, i'm using this alias to part all channels
-      if ( $2 == noquit ) { 
-        var %c $numtok(%ms.cq.chans,44)
-        while ( %c ) {
-          ms.client.part %ms.cq.num $gettok(%ms.cq.chans,%c,44)
-          dec %c
-        }
-      }
-      else {
-        ; Set variable to stop spybot from reporting this client
-        set -u1 %ms.client.part.quiet. $+ %ms.cq.num true
-        var %c $numtok(%ms.cq.chans,44)
-        while ( %c ) {
-          ms.client.part %ms.cq.num $gettok(%ms.cq.chans,%c,44)
-          dec %c
-        }
-      }
-    ; Else not on any chans 
-    }
-    
-    ms.servicebot.p10.quit $1 $2-
+  var %ms.cq.num $1
+  var %ms.cq.chans $ms.db(read,l,%ms.cq.num)
 
-    ; Remove client and nick hisotry from database
+  ; when join 0 the client is not quiting, i'm using this alias to part all channels
+  if ( $2 == noquit ) { 
+    var %c $numtok(%ms.cq.chans,44)
+    while ( %c ) {
+      ms.client.part %ms.cq.num $gettok(%ms.cq.chans,%c,44)
+      dec %c
+    }
+  }
+  else {
+    set -u1 %ms.client.part.quiet. $+ %ms.cq.num true
+    var %c $numtok(%ms.cq.chans,44)
+    while ( %c ) {
+      ms.client.part %ms.cq.num $gettok(%ms.cq.chans,%c,44)
+      dec %c
+    }
+    if ( %ms.spybot.report == true ) { ms.spybot.report Q $1 $2- }
+    var %ms.cq.srvnum $gettok($gettok($ms.db(read,c,%ms.cq.num),1,44),2,32)
     ms.db rem c %ms.cq.num
     ms.db rem nh %ms.cq.num
-
-    ; var %ms.cq.srvnum $gettok($gettok($ms.db(read,c,%ms.cq.num),1,44),2,32)
-    var %ms.cq.srvnum $left(%ms.cq.num,2)
-    var %ms.sq.srvnum.clients $ms.db(read,l,%ms.cq.srvnum)
-
-    ; Count number of users left on server, if this was the last one, remove list section to the server, it wil be added again when a new client joins
-    if ( $numtok(%ms.sq.srvnum.clients,44) <= 1 ) { ms.db rem l %ms.cq.srvnum }
-    else { ms.db write l %ms.cq.srvnum $remtok(%ms.sq.srvnum.clients,%ms.cq.num,44) }
-
+    if ( $numtok($ms.db(read,l,%ms.cq.srvnum),44) <= 1 ) { ms.db rem l %ms.cq.srvnum }
+    else { ms.db write l %ms.cq.srvnum $remtok($ms.db(read,l,%ms.cq.srvnum),%ms.cq.num,44) }
     ms.echo blue [IAL DB] Removed client %ms.cq.num from server
   }
-  else { ms.echo red [IAL DB] Client %ms.cq.num not found in database | return }
   return
 }
 
@@ -437,17 +413,7 @@ alias ms.mode.channel {
   ms.servicebot.p10.chanmode %ms.mc.num %ms.mc.chan %ms.mc.modes %ms.mc.args
   return
 }
-; <client numeric> <channel> <+-modes> <arg1 arg2 arg3 arg4 etc> <timestamp>
-alias ms.opmode.channel { 
-  var %ms.mc.num $1
-  var %ms.mc.chan $2
-  var %ms.mc.modes $3
-  var %ms.mc.args $4-
 
-  ms.change.channel modes %ms.mc.num %ms.mc.chan %ms.mc.modes %ms.mc.args
-  ms.servicebot.p10.opmode %ms.mc.num %ms.mc.chan %ms.mc.modes %ms.mc.args
-  return
-}
 ; BbAC6 #testchan -v+tnklo IAAAA code 123 BdAAA 1000000000
 ; BdAAA #testchan +m 1000000000
 ; BdAAA #testchan +o IAAAX 1000000000
@@ -471,6 +437,7 @@ alias ms.change.channel {
       var %i 1
       var %len $len(%ms.cc.modes)
 
+      echo -a Old Data: %ms.cc.data
       while (%i <= %len) {
 
         ; Pick next char

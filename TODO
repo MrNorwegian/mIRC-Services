@@ -1,8 +1,8 @@
 * BIG TODO !!!!!!!!!!!!!!!!!!!
 - ms.change.channel (mode channel)
-- Missing +ov in mode channel, but +tnsmikl works 
-- Might want to do an check what modes the servers supports, for now it's hardcoded
 * Manage M and OM (mode and opmode)
+- do a little test, M is for both usermode and chanmode, dunno with opmode
+- Must sort +w-i etc and add\remove from database
 
 * Make a listchannels command for all of the
 - funbots
@@ -15,12 +15,17 @@
 * Burst servicebots 
 - On B (burst of channels), use timestamp from uplink
 
+* You were kicked by *.deepnet.chat (Net Rider)
+- If +ik kick clients that doesnt belong there
+
 * Spybot during server burst
 - After %ms.status linked finished, if a new server connects set some variable with server num
 - Bb S London.UK.EU.deepnet.chat 4 0 1736345310 J10 BcAP] +6 :Some place in UK 
 - this case Bc not Bb
 - if Bc N do not report or change report text in #spychan and #debug
 - After Bc EA burst of new server is finished 
+
+* Add $ms.spybot.isignored(servername,nickname,channelname) and return true or something if true ? For now i'm doing lots of the same if checks 
 
 * finish fullnumeric in $ms.config.get(arg1,arg2)
 - numeric should return BBB and fullnumeric AABBB, not numeric returns AABBB so there is lots of code needs to be changed

@@ -35,23 +35,3 @@ alias base64toip {
   var %ip4 = $calc(%num % 256)
   return $+(%ip1,.,%ip2,.,%ip3,.,%ip4)
 }
-
-; Dev versions of the above functions for testing ipv4\ipv6 
-alias inttobase64dev {
-  var %c = $2, %o, %v = $1
-  while (%c) {
-    var %o = $+($ii($and(%v,63)),%o)
-    var %v = $calc(%v / 64) 
-    dec %c
-  }
-  return %o
-}
-alias base64tointdev {
-  var %o = 0, %x = 1
-  while ($mid($1,%x,1) != $null) { 
-    var %o = $calc(%o * 64)
-    var %o = $calc(%o + $i($v1))
-    inc %x
-  }
-  return %o
-}

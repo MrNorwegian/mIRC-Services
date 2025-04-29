@@ -84,10 +84,8 @@ on *:sockread:mServices:{
   sockread %mServices.sockRead
   tokenize 32 %mServices.sockRead
 
-  ; Just for debugging into console and #debug channel 
-  if ( %mServices.ignore.PINGPONG == true ) { 
-    if ( $istok(G RI TI,$2,32) != $true ) { ms.debug orange [Sockread Server] --> $1- }
-  }
+  ; Just for debugging in console or #debug channel
+  ms.debug orange [Sockread Server] --> $1-
 
   if ($sockerr > 0) {
     ms.echo red [Sockread] : $sockname closed due to error ( $sockerr )
@@ -199,7 +197,6 @@ on *:sockread:mServices:{
   }
 
   ; <client numeric> <J|JOIN> <channel> <timestamp> 
-  ; <client numeric> <J|JOIN> [0] (/partall)
   elseif ($istok(J JOIN,$2,32) == $true) {
     if ( $3 !isnum ) { ms.client.join $1 $3 $4 }
     ; if $3 is 0 then the user joined 0 (that's like /partall)
@@ -238,7 +235,8 @@ on *:sockread:mServices:{
 
   ; <client numeric> <OM|OPMODE> <channel> <modes> <params\client numerics>
   elseif ($istok(OM OPMODE,$2,32) == $true) {
-    if ( $left($3,1) == $chr(35) ) { ms.opmode.channel $1 $3 $4 $5- 0 }
+    if ( $left($3,1) == $chr(35) ) { ms.mode.channel $1 $3 $4 $5- }
+    ; TODO set modes, NOTE: this is for channels AND clients !, use same alias as mode above?
     return
   }
 
@@ -307,13 +305,15 @@ on *:sockread:mServices:{
 
   ; <numeric> <SQ|SQUIT> <server name> <time> :<reason>
   elseif ($istok(SQ SQUIT,$2,32) == $true) {
+    ; TODO remove clients connected to the server sending SQ, also all leaf servers for that server, sooo good luck with that
+    ; Read SQuit, this might be a little related (use ms.client.quit or something)
+
     if ( $1 == %ms.numeric ) { ms.echo green [mServices mIRC Server] Stopped server }
-    ; Some server SQ, try find out who
+    ; Some server sq, try find out who
     else { 
       set %ms.sq.server $3
       set %ms.sq.num 0
       set %ms.sq.servers $ms.db(read,l,servers)
-      ; Sending /links to find out who is missing
       mServices.sraw LI
       ms.debug red [SQuit detected] - $1-
       ms.servicebot.p10.srvsplit $1 $3 $4 $5-
