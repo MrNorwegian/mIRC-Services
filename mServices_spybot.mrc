@@ -64,7 +64,7 @@ alias ms.spybot.report {
 
     ; Gather spybot numeric and channel to report to in one short variable
     var %spch %ms.sb.spybot.numeric $ms.config.get(chan,spybot)
-    
+
     ; S %ms.ns.hubservernum %ms.ns.name %ms.ns.hop %ms.ns.starttime %ms.ns.linktime %ms.ns.protocol %ms.ns.maxcon %ms.ns.flags %ms.ns.desc
     if ( $1 === S ) { 
       var %spr.shu $ms.get.server(name,$2)
@@ -77,7 +77,7 @@ alias ms.spybot.report {
         return
       }
     }
-    
+
     ; SQ <nick|server numeric> <server name> <time> :<reason>
     elseif ( $1 === SQ ) { 
       echo -a SPLIT $1-
@@ -320,8 +320,8 @@ alias ms.spybot.report {
         return
       }
     }
-    }
   }
+}
 }
 
 ; Spybot debug channel reporting

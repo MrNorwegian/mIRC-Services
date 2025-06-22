@@ -113,23 +113,24 @@ alias ms.stop.funbots {
 ; <client numeric> <target nick> <target chan>
 alias ms.funbots.invited {
   if ($istok($ms.config.get(load,funbots),$2,44)) {
-    var %ms.sb.clientnum $1
-    var %ms.sb.chan $3
-    var %ms.sb.num %ms.fb. [ $+ [ $2 ] ] [ $+ [ .numeric ] ]
-    var %ms.sb.chans $ms.config.get(channels,$2)
-    if ($istok(%ms.sb.chans,%ms.sb.chan,44)) { ms.servicebot.join %ms.sb.num %ms.sb.chan }
-    else { ms.servicebot.addchan $2 $3 | ms.servicebot.join %ms.sb.num %ms.sb.chan }
+    var %ms.fb.clientnum $1
+    var %ms.fb.chan $3
+    var %ms.fb.num %ms.fb. [ $+ [ $2 ] ] [ $+ [ .numeric ] ]
+    var %ms.fb.chans $ms.config.get(channels,$2)
+    if ($istok(%ms.fb.chans,%ms.fb.chan,44)) { ms.servicebot.join %ms.fb.num %ms.fb.chan }
+    else { ms.servicebot.addchan $2 $3 | ms.servicebot.join %ms.fb.num %ms.fb.chan }
   }
 }
 
 ; <client numeric> <channel> <target numeric> 
 alias ms.funbots.kicked {
-  var %ms.sb.nick %ms.fb. [ $+ [ $3 ] ]
-  if ($istok($ms.config.get(load,funbots),%ms.sb.nick,44)) {
-    if ( $istok($ms.config.get(channels,%ms.sb.nick),$2,44) ) { ms.servicebot.remchan %ms.sb.nick $2 }
+  var %ms.fb.nick %ms.fb. [ $+ [ $3 ] ]
+  if ($istok($ms.config.get(load,funbots),%ms.fb.nick,44)) {
+    if ( $istok($ms.config.get(channels,%ms.fb.nick),$2,44) ) { ms.servicebot.remchan %ms.fb.nick $2 }
   }
 }
 
+; <client numeric> <targetchan\targetclient numeric> :<message>
 alias ms.funbots.privmsg { 
   ms.fb.fishbot.privmsg $1- 
   ms.fb.banana.privmsg $1-

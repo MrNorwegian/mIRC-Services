@@ -14,7 +14,7 @@ alias mServices.sraw {
   if ($sock(mServices) != $null) { 
     sockwrite -nt mServices $inttobase64($mServices.config(numeric),2) $1-
     if ( $mServices.config(rawdebug) == true ) { 
-        ; Just for debugging into console and #debug channel 
+      ; Just for debugging into console and #debug channel 
       if ( %mServices.ignore.PINGPONG == true ) { 
         if ( $istok(Z RO,$1,32) != $true ) { ms.debug orange [Sockwrite Server] <-- $inttobase64($mServices.config(numeric),2) $1- }
       }
@@ -98,6 +98,11 @@ alias ms.newclient {
     var %ms.nc.host $7
     if ( + isin $8 ) { 
       var %ms.nc.modes $8
+
+      ; +rz auth tlsfingerprint
+      ; +zr tlsfingerprint auth
+      ; +z tlsfingerprint-only
+      ; +r auth-only
       if ( r isin %ms.nc.modes ) {
         var %ms.nc.auth $gettok($9,1,58)
         var %ms.nc.base64ip $10
@@ -139,6 +144,9 @@ alias ms.newclient {
     }
     ms.servicebot.p10.Newclient %ms.nc.srvnum %ms.nc.nick %ms.nc.hopcount %ms.nc.timestamp %ms.nc.user %ms.nc.host %ms.nc.modes %ms.nc.auth %ms.nc.base64ip %ms.nc.num %ms.nc.realname
     ms.echo blue [IAL DB] Client %ms.nc.num connected to server %ms.nc.srvnum as %ms.nc.nick
+
+    echo -a New Client: %ms.clnum %ms.nc.num %ms.nc.nick
+    inc %ms.clnum
   }
 
   ; Handle nickchange
@@ -385,7 +393,7 @@ alias ms.client.quit {
     var %ms.cq.num $1
     ; Check if we client is on any chans and part them 
     if ( $ms.db(read,l,%ms.cq.num) ) { var %ms.cq.chans $v1 }
-      if ( %ms.cq.chans ) {
+    if ( %ms.cq.chans ) {
       ; when join 0 the client is not quiting, i'm using this alias to part all channels
       if ( $2 == noquit ) { 
         var %c $numtok(%ms.cq.chans,44)
@@ -403,9 +411,9 @@ alias ms.client.quit {
           dec %c
         }
       }
-    ; Else not on any chans 
+      ; Else not on any chans 
     }
-    
+
     ms.servicebot.p10.quit $1 $2-
 
     ; Remove client and nick hisotry from database
@@ -465,7 +473,7 @@ alias ms.change.channel {
       var %nextarg 1
 
       var %ms.cc.data $ms.db(read,ch,%ms.cc.chan)
- 
+
       var %ms.cc.oldmode $ms.get.channel(modes,%ms.cc.chan)
       var %ms.cc.mode.new $ms.get.channel(modes,%ms.cc.chan)
       var %i 1
@@ -484,7 +492,7 @@ alias ms.change.channel {
         if ( %char isincs imnpstrDdRcCMPkl ) { 
           if (%action == add) { 
             ; Check if channel does not have any modes set, else add more modes
-            if ( %ms.cc.oldmode == NONE ) { var %ms.cc.mode.new $+(+,%char) }
+            if ( %ms.cc.oldmode == NONE ) { var %ms.cc.mode.new $+($chr(43),%char) | var %ms.cc.oldmode %ms.cc.mode.new }
             else { var %ms.cc.mode.new $+(%ms.cc.mode.new,%char) }
           }
           elseif (%action == remove) { 
@@ -520,7 +528,7 @@ alias ms.change.channel {
         inc %i
       }
       var %ms.cc.mode.ts $gettok(%ms.cc.args,%nextarg,32)
-      
+
       ; Save key,limit,bans to the database
       if ( %ms.cc.mode.newkey ) { var %ms.cc.data $puttok(%ms.cc.data,chankey %ms.cc.mode.newkey,4,44) }
       if ( %ms.cc.mode.newlimit ) { var %ms.cc.data $puttok(%ms.cc.data,chanlimit %ms.cc.mode.newlimit,3,44) }
@@ -545,7 +553,7 @@ alias ms.mode.client {
   return
 }
 
-; /ms.change.client nick\ident\host\modes\ac\account\auth\baseip64 realname numeric newnick
+; /ms.change.client nick\ident\host\modes\ac\account\auth\baseip64\realname\newnick nick-numeric <args>
 alias ms.change.client {
   if ( $3 ) {
     if ( $ms.db(read,c,$2) ) { 
@@ -589,7 +597,6 @@ alias ms.change.client {
 }
 
 ; $ms.get.client(nick,clientNUMERIC) $ms.get.client(modes,clientNUMERIC) $ms.get.client(numeric,clientNICK) etc
-; $ms.get.client(numeric,clientNICK)
 alias ms.get.client {
   if ( $1 == numeric ) && ( $2 ) { 
     var %ms.get.clnum.i $hfind(clients,$+($chr(42),nick $2,$chr(42)),0,w).data
@@ -732,18 +739,20 @@ alias ms.db.reset {
   else { hmake -s chanhistory 10000 }
   if ( $hget(config) ) { hfree config | hmake -s config 100 }
   else { hmake -s config 100 }
+  if ( $hget(fb) ) { hfree fb | hmake -s fb 1000 }
+  else { hmake -s fb 1000 }
+  if ( $hget(gb) ) { hfree gb | hmake -s gb 1000 }
+  else { hmake -s gb 1000 }
 }
 
 alias ms.db {
   ; $ms.db(read,s,arg1)
   ; /ms.db write ch arg1 arg2+
   ; /ms.db rem\del c [arg1]
-
   ; TODO: add  $ms.db(search,c,num,TEXT) to search for a specific value in the database in arg1 section 
-
-  ; TODO: Remove .ini, numerics with [ interfere with the .ini file
-  ; After testing move this variable to mServices_config.mrc and begin sql db testing ?
+  ; TODO: Make sql support and move this variable to ms.config.ini
   var %ms.db.type hash
+
   if ( $2 ) {
     if ( $2 == s ) { var %db.file ms.ial.ini | var %db.topic servers | var %db.hash servers }
     elseif ( $2 == c ) { var %db.file ms.ial.ini | var %db.topic clients | var %db.hash clients }
@@ -752,20 +761,22 @@ alias ms.db {
     elseif ( $2 == nh ) { var %db.file ms.ial.ini | var %db.topic nickhistory | var %db.hash nickhistory | var %db.history ms.history.ini }
     elseif ( $2 == chhi ) { var %db.file ms.ial.ini | var %db.topic chanhistory | var %db.hash chanhistory | var %db.history ms.history.ini }
     elseif ( $2 == config ) { var %db.file ms.ial.ini | var %db.topic config | var %db.hash config }
+    elseif ( $2 == fb ) { var %db.file ms.fb.ini | var %db.topic fb | var %db.hash fb }
+    elseif ( $2 == gb ) { var %db.file ms.gb.ini | var %db.topic gb | var %db.hash gb }
     else { var %db.file $+($2,.ini) | var %db.hash $2 }
 
     var %db.arg1 $3 ,%db.arg2 $4-
 
     if ( $1 = read ) {
       if ( %db.arg1 ) { 
-        if ( %ms.db.type = ini ) { return $readini(%db.file,%db.topic,%db.arg1) }
+        if ( %ms.db.type = sql ) { return $readini(%db.file,%db.topic,%db.arg1) }
         elseif ( %ms.db.type = hash ) { return $hget(%db.hash,%db.arg1) }
       }
       else { ms.echo red DB read error, missing arg1: $1- }
     }
     elseif ( $1 = write ) {
       if ( %db.arg2 ) { 
-        if ( %ms.db.type = ini ) { writeini %db.file %db.topic %db.arg1 %db.arg2 }
+        if ( %ms.db.type = sql ) { writeini %db.file %db.topic %db.arg1 %db.arg2 }
         elseif ( %ms.db.type = hash ) { hadd %db.hash %db.arg1 %db.arg2 }
 
         ; This is for longterm storage of nickhistory and chanhistory, read TODO before enabling
@@ -776,62 +787,82 @@ alias ms.db {
     }
     elseif ( $1 = rem ) || ( $1 = del ) { 
       if ( %db.arg1 ) { 
-        if ( %ms.db.type = ini ) { remini %db.file %db.topic %db.arg1 }
+        if ( %ms.db.type = sql ) { remini %db.file %db.topic %db.arg1 }
         elseif ( %ms.db.type = hash ) { hdel %db.hash %db.arg1 }
       }
       else { remini %db.file %db.topic }
     }
-    elseif ( $1 == search ) && ( %ms.db.type == hash ) {
-      if ( $3 == num ) { return $hfind(%db.hash,$+($chr(42),$3,$chr(42)),1,w).item }
-      elseif ( $hfind($2,$+($chr(42),$3,$chr(42)),1,w).data ) { return $v1 }
-      else { return $null }
+    elseif ( $1 == search ) {
+      if ( %ms.db.type == sql ) { return }
+      if ( %ms.db.type == hash ) {
+        if ( $3 == num ) { return $hfind(%db.hash,$+($chr(42),$3,$chr(42)),1,w).item }
+        elseif ( $hfind($2,$+($chr(42),$3,$chr(42)),1,w).data ) { return $v1 }
+        else { return $null }
+      }
     }
     else { ms.echo red DB error, missing read\write or rem\del: $1- }
   }
 
-  elseif ( $1 == list ) && ( %ms.db.type == hash ) { 
-    var %c $hget(clients,0).data
-    echo 7 $+(Total clients: %c)
-    while (%c) { 
-      echo -a %c $hget(clients,%c).item $hget(clients,%c).data
-      dec %c
-    }
-    var %s $hget(servers,0).data
-    echo 7 $+(Total servers: %s)
-    while (%s) { 
-      echo -a %s $hget(servers,%s).item $hget(servers,%s).data
-      dec %s
-    }
-    var %ch $hget(channels,0).data
-    echo 7 $+(Total channels: %ch)
-    while (%ch) { 
-      echo -a %ch $hget(channels,%ch).item $hget(channels,%ch).data
-      dec %ch
-    }
+  elseif ( $1 == list ) {
+    if ( %ms.db.type == sql ) { return }
+    if ( %ms.db.type == hash ) { 
+      var %c $hget(clients,0).data
+      echo 7 $+(Total clients: %c)
+      while (%c) { 
+        echo -a %c $hget(clients,%c).item $hget(clients,%c).data
+        dec %c
+      }
+      var %s $hget(servers,0).data
+      echo 7 $+(Total servers: %s)
+      while (%s) { 
+        echo -a %s $hget(servers,%s).item $hget(servers,%s).data
+        dec %s
+      }
+      var %ch $hget(channels,0).data
+      echo 7 $+(Total channels: %ch)
+      while (%ch) { 
+        echo -a %ch $hget(channels,%ch).item $hget(channels,%ch).data
+        dec %ch
+      }
 
-    var %l $hget(list,0).data
-    echo 7 $+(Total list: %l)
-    while (%l) { 
-      echo -a %l $hget(list,%l).item $hget(list,%l).data
-      dec %l
-    }
-    var %nh $hget(nickhistory,0).data
-    echo 7 $+(Total nickhistory: %nh)
-    while (%nh) { 
-      echo -a %nh $hget(nickhistory,%nh).item $hget(nickhistory,%nh).data
-      dec %nh
-    }
-    var %chhistory $hget(chanhistory,0).data
-    echo 7 $+(Total chanhistory: %chhistory)
-    while (%chhistory) { 
-      echo -a %chhistory $hget(chanhistory,%chhistory).item $hget(chanhistory,%chhistory).data
-      dec %chhistory
-    }
-    var %l $hget(config,0).data
-    echo 7 $+(Total config: %l)
-    while (%l) { 
-      echo -a %l $hget(config,%l).item $hget(config,%l).data
-      dec %l
+      var %l $hget(list,0).data
+      echo 7 $+(Total list: %l)
+      while (%l) { 
+        echo -a %l $hget(list,%l).item $hget(list,%l).data
+        dec %l
+      }
+      var %nh $hget(nickhistory,0).data
+      echo 7 $+(Total nickhistory: %nh)
+      while (%nh) { 
+
+        ; TODO konvert nicknumeric from int to base64
+        echo -a %nh $hget(nickhistory,%nh).item $hget(nickhistory,%nh).data
+        dec %nh
+      }
+      var %chhistory $hget(chanhistory,0).data
+      echo 7 $+(Total chanhistory: %chhistory)
+      while (%chhistory) { 
+        echo -a %chhistory $hget(chanhistory,%chhistory).item $hget(chanhistory,%chhistory).data
+        dec %chhistory
+      }
+      var %l $hget(config,0).data
+      echo 7 $+(Total config: %l)
+      while (%l) { 
+        echo -a %l $hget(config,%l).item $hget(config,%l).data
+        dec %l
+      }
+      var %fb $hget(fb,0).data
+      echo 7 $+(Total fb: %fb)
+      while (%fb) { 
+        echo -a %fb $hget(fb,%fb).item $hget(fb,%fb).data
+        dec %fb
+      }
+      var %gb $hget(gb,0).data
+      echo 7 $+(Total gb: %gb)
+      while (%gb) { 
+        echo -a %gb $hget(gb,%gb).item $hget(gb,%gb).data
+        dec %gb
+      }
     }
   }
   else { ms.echo red DB error, missing atleast topic: $1- }

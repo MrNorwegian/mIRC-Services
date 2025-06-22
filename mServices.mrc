@@ -68,6 +68,7 @@ on *:sockopen:mServices:{
   var %ms.maxcon $inttobase64($mServices.config(maxcon),3)
   set %ms.startime $ctime
   set %ms.status linking
+  set %ms.clnum 1
 
   ; sending PASS, SERVER and burst
   ms.echo blue [mServices mIRC Server] Connection established to $+($mServices.config(hostname),$mServices.config(port))
@@ -270,7 +271,7 @@ on *:sockread:mServices:{
 
   ; <client numeric> <I|INVITE> <target nick> <target chan> <someID>
   elseif ($istok(I INVITE,$2,32) == $true) {
-    ms.servicebot.p10.invited $1 $3 $4 $5
+    ms.servicebot.p10.invited $1 $3 $4-
     return
   }
 

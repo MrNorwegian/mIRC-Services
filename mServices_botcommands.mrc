@@ -172,6 +172,7 @@ alias ms.servicebot.p10.chparted {
 ; <client numeric> <target nick> <target chan>
 alias ms.servicebot.p10.invited { 
   if ( %mServices.loaded.funbots ) { ms.funbots.invited $1- }
+  if ( %mServices.loaded.gamebot ) { ms.gamebot.invited $1- }
 }
 
 ; <client numeric> <target client numeric> <modes>

@@ -24,7 +24,7 @@ alias ms.gamebot.makeconfig {
   writeini -n %mServices.config gamebot load gamebot
 
   writeini -n %mServices.config gamebot numeric AAG
-  writeini -n %mServices.config gamebot nick G
+  writeini -n %mServices.config gamebot nick Gamebot
   writeini -n %mServices.config gamebot user gamebot
   writeini -n %mServices.config gamebot host is.here.to.play.games
   writeini -n %mServices.config gamebot ip 127.0.0.1
@@ -43,9 +43,9 @@ alias ms.start.gamebot {
     ms.echo blue [mServices mIRC Services] Launching gamebot: %ms.gb.bot
 
     ; Setting permanent variables because i think i'm going to use them a lot and it's easier to use.
-    ;set %ms.gb. $+ %ms.gb.bot $+ .numeric $ms.config.get(numeric,%ms.gb.bot)
-    ;set %ms.gb. $+ %ms.gb.bot $+ .nick $ms.config.get(nick,%ms.gb.bot)
-    ;set %ms.gb. $+ $ms.config.get(numeric,%ms.gb.bot) $ms.config.get(nick,%ms.gb.bot)
+    set %ms.gb. $+ %ms.gb.bot $+ .numeric $ms.config.get(numeric,%ms.gb.bot)
+    set %ms.gb. $+ %ms.gb.bot $+ .nick $ms.config.get(nick,%ms.gb.bot)
+    set %ms.gb. $+ $ms.config.get(numeric,%ms.gb.bot) $ms.config.get(nick,%ms.gb.bot)
 
     ms.servicebot.spawn $ms.config.get(nick,%ms.gb.bot) $ctime $ms.config.get(user,%ms.gb.bot) $ms.config.get(host,%ms.gb.bot) $ms.config.get(modes,%ms.gb.bot) $ms.config.get(account,%ms.gb.bot) $ms.config.get(ip,%ms.gb.bot) $ms.config.get(numeric,%ms.gb.bot) $ms.config.get(realname,%ms.gb.bot)
     ms.servicebot.join $ms.config.get(numeric,%ms.gb.bot) $ms.config.get(adminchan,%ms.gb.bot)
@@ -58,11 +58,34 @@ alias ms.stop.gamebot {
   }
 }
 
+; <client numeric> <targetchan\targetclient numeric> :<message>
 alias ms.gamebot.privmsg {
-  set %ms.gb.nick $1
-  set %ms.gb.chan $2
-  set %ms.gb.msg $remove($3,:) $4-
-  ms.gb.3row %ms.gb.nick %ms.gb.chan %ms.gb.msg
-  ms.gb.magic %ms.gb.nick %ms.gb.chan %ms.gb.msg
+  set -u1 %ms.gb.clientnum $1
+  set -u1 %ms.gb.chan $2
+  set -u1 %ms.gb.msg $remove($3,:) $4-
+
+  ; Later, make check if bot ison channel
+  ms.gb.3row %ms.gb.clientnum %ms.gb.chan %ms.gb.msg
+  ms.gb.magic %ms.gb.clientnum %ms.gb.chan %ms.gb.msg
   return
+}
+
+; <client numeric> <target nick> <target chan>
+alias ms.gamebot.invited {
+  if ($istok($ms.config.get(load,gamebot),$2,44)) {
+    var %ms.gb.clientnum $1
+    var %ms.gb.chan $3
+    var %ms.gb.num %ms.gb. [ $+ [ $2 ] ] [ $+ [ .numeric ] ]
+    var %ms.gb.chans $ms.config.get(channels,$2)
+    if ($istok(%ms.gb.chans,%ms.gb.chan,44)) { ms.servicebot.join %ms.gb.num %ms.gb.chan }
+    else { ms.servicebot.addchan $2 $3 | ms.servicebot.join %ms.gb.num %ms.gb.chan }
+  }
+}
+
+; <client numeric> <channel> <target numeric> 
+alias ms.gamebot.kicked {
+  var %ms.gb.botnick %ms.gb. [ $+ [ $3 ] ]
+  if ($istok($ms.config.get(load,gamebot),%ms.gb.botnick,44)) {
+    if ( $istok($ms.config.get(channels,%ms.gb.botnick),$2,44) ) { ms.servicebot.remchan %ms.gb.botnick $2 }
+  }
 }

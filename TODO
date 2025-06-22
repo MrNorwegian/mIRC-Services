@@ -3,6 +3,7 @@
 * Manage M and OM (mode and opmode)
 - do a little test, M is for both usermode and chanmode, dunno with opmode
 - Must sort +w-i etc and add\remove from database
+- when usermode +x hide hostname with <account>.users.network.org
 
 * Make a listchannels command for all of the
 - funbots
